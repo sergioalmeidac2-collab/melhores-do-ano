@@ -1,0 +1,191 @@
+// ----------------------------------------------------------------------------
+// MELHORES DO ANO — schema de dados
+//
+// Postgres (Supabase), tanto em dev quanto em produção, para evitar
+// divergências de comportamento entre ambientes (enums, tipos de data etc).
+// DATABASE_URL vem do .env — aponte para o seu projeto Supabase.
+// ----------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// votingStatus e status abaixo são String (não enum do Prisma) com os valores
+// restritos por validação Zod na camada de API:
+//   votingStatus: "NOT_STARTED" | "OPEN" | "CLOSED"
+//   status (Vote): "VALID" | "SUSPICIOUS" | "INVALID"
+// Poderiam virar enum nativo do Postgres numa iteração futura; mantidos como
+// String por ora para não introduzir uma migração de tipo sem banco real para testar.
+
+model EventSettings {
+  id            String       @id @default(cuid())
+  eventName     String       @default("Melhores do Ano")
+  eventYear     Int          @default(2026)
+  city          String       @default("")
+  logoUrl       String?
+  heroTitle     String       @default("MELHORES DO ANO")
+  heroSubtitle  String       @default("Escolha as empresas que mais se destacaram na sua cidade.")
+  primaryColor  String       @default("#c98a1c")
+  rulesText     String       @default("")
+  votesPerCategory Int       @default(1)
+  votingStatus  String       @default("NOT_STARTED")
+  startsAt      DateTime?
+  endsAt        DateTime?
+  autoSchedule  Boolean      @default(false)
+  updatedAt     DateTime     @updatedAt
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin") // admin | editor
+  createdAt    DateTime @default(now())
+  auditLogs    AuditLog[]
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  emoji       String   @default("🏆")
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  companies CategoryCompany[]
+  votes     Vote[]
+
+  @@index([active, order])
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  logoUrl     String?
+  instagram   String?
+  phone       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categories CategoryCompany[]
+  votes      Vote[]
+}
+
+// Junction table: uma empresa pode participar de várias categorias
+model CategoryCompany {
+  id         String   @id @default(cuid())
+  categoryId String
+  companyId  String
+  order      Int      @default(0)
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, companyId])
+  @@index([categoryId])
+}
+
+// Uma pessoa (identificada primariamente pelo telefone normalizado)
+model Participant {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String   @unique // formato normalizado E.164-like: 55DDDNNNNNNNNN
+  instagram     String?
+  email         String?
+  city          String?
+  neighborhood  String?
+  howFoundOut   String?
+  marketingOptIn Boolean @default(false)
+  createdAt     DateTime @default(now())
+
+  votes Vote[]
+}
+
+model VoteSource {
+  id           String   @id @default(cuid())
+  label        String   // ex: "QR Code Restaurante", "Instagram Bio"
+  slug         String   @unique
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  utmTerm      String?
+  createdAt    DateTime @default(now())
+
+  votes Vote[]
+}
+
+model Vote {
+  id             String                @id @default(cuid())
+  categoryId     String
+  companyId      String
+  participantId  String
+  voteSourceId   String?
+
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  utmContent     String?
+  utmTerm        String?
+
+  ipHash         String
+  userAgent      String?
+  sessionId      String?
+
+  status         String               @default("VALID")
+  reviewNote     String?
+
+  consentTerms      Boolean @default(false)
+  consentMarketing  Boolean @default(false)
+
+  createdAt      DateTime @default(now())
+
+  category    Category    @relation(fields: [categoryId], references: [id])
+  company     Company     @relation(fields: [companyId], references: [id])
+  participant Participant @relation(fields: [participantId], references: [id])
+  voteSource  VoteSource? @relation(fields: [voteSourceId], references: [id])
+
+  // Regra antifraude principal: 1 voto por telefone por categoria
+  @@unique([participantId, categoryId])
+  @@index([categoryId, companyId])
+  @@index([createdAt])
+  @@index([ipHash, createdAt])
+}
+
+model BlockedPhone {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model BlockedSession {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  adminId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  admin Admin? @relation(fields: [adminId], references: [id])
+}
