@@ -8,11 +8,15 @@
 // "Transaction", porta 6543) não suporta os locks de sessão que o Prisma
 // Migrate precisa — usar só o pooler faz `prisma migrate deploy` travar ou
 // falhar de forma imprevisível:
-//   DATABASE_URL -> pooler (6543), usado pela aplicação em runtime (serverless)
-//   DIRECT_URL   -> conexão direta (5432), usado só por `prisma migrate deploy`
-// Ambos vêm do mesmo projeto Supabase (Settings -> Database -> Connection
-// string): DATABASE_URL da aba "Transaction", DIRECT_URL da aba "Session"
-// ou "Direct connection".
+//   DATABASE_URL -> pooler modo "Transaction" (porta 6543), usado pela
+//                   aplicação em runtime (serverless)
+//   DIRECT_URL   -> pooler modo "Session" (mesmo host, porta 5432), usado só
+//                   por `prisma migrate deploy`
+// Os dois vêm da aba "Connection string" do Supabase (Settings -> Database).
+// NÃO use a opção "Direct connection" (host db.xxxx.supabase.co) para
+// DIRECT_URL — ela é IPv6-only e não conecta na maioria dos ambientes
+// (Vercel, redes sem suporte a IPv6 etc). Use a aba "Session" do pooler,
+// que é IPv4 e já suporta os locks que o Migrate precisa.
 // ----------------------------------------------------------------------------
 
 generator client {

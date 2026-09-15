@@ -8,7 +8,7 @@ Stack: **Next.js 14 (App Router) + Prisma + PostgreSQL**, pensado para rodar na 
 
 1. Copie `.env.example` para `.env` e preencha (nenhum desses é a "Project URL" de Settings → API, que começa com `https://` e é para o SDK JS, não para o Prisma — os dois abaixo sempre começam com `postgresql://`):
    - `DATABASE_URL` — Settings → Database → Connection string → aba **"Transaction"** (pooler, porta 6543)
-   - `DIRECT_URL` — mesma tela, aba **"Session"** ou **"Direct connection"** (porta 5432). Necessária porque `prisma migrate deploy` trava/falha usando só o pooler — ele precisa de uma conexão direta para os locks de migração.
+   - `DIRECT_URL` — mesma tela, aba **"Session"** (mesmo host do pooler acima, só a porta muda pra 5432). Necessária porque `prisma migrate deploy` trava/falha no modo "Transaction" — ele precisa dos locks de sessão que só o modo "Session" suporta. **Não use** a opção "Direct connection" (host `db.xxxx.supabase.co`): é IPv6-only e não conecta na Vercel nem na maioria das redes.
    - `SESSION_SECRET` — uma string aleatória (gere com `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"`)
 2. Instale e prepare o banco:
 
