@@ -6,7 +6,7 @@ Stack: **Next.js 14 (App Router) + Prisma + PostgreSQL**, pensado para rodar na 
 
 ## Rodando localmente
 
-1. Copie `.env.example` para `.env` e preencha `DATABASE_URL` com a connection string do seu projeto Supabase (Settings → Database → Connection string → modo "Transaction pooler", porta 6543) e um `SESSION_SECRET` aleatório.
+1. Copie `.env.example` para `.env` e preencha `DATABASE_URL` com a connection string do seu projeto Supabase (Settings → Database → Connection string → modo "Transaction pooler", porta 6543 — **não** é a "Project URL" de Settings → API, que começa com `https://` e é para o SDK JS, não para o Prisma) e um `SESSION_SECRET` aleatório.
 2. Instale e prepare o banco:
 
 ```bash
