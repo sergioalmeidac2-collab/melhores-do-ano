@@ -6,7 +6,10 @@ Stack: **Next.js 14 (App Router) + Prisma + PostgreSQL**, pensado para rodar na 
 
 ## Rodando localmente
 
-1. Copie `.env.example` para `.env` e preencha `DATABASE_URL` com a connection string do seu projeto Supabase (Settings → Database → Connection string → modo "Transaction pooler", porta 6543 — **não** é a "Project URL" de Settings → API, que começa com `https://` e é para o SDK JS, não para o Prisma) e um `SESSION_SECRET` aleatório.
+1. Copie `.env.example` para `.env` e preencha (nenhum desses é a "Project URL" de Settings → API, que começa com `https://` e é para o SDK JS, não para o Prisma — os dois abaixo sempre começam com `postgresql://`):
+   - `DATABASE_URL` — Settings → Database → Connection string → aba **"Transaction"** (pooler, porta 6543)
+   - `DIRECT_URL` — mesma tela, aba **"Session"** ou **"Direct connection"** (porta 5432). Necessária porque `prisma migrate deploy` trava/falha usando só o pooler — ele precisa de uma conexão direta para os locks de migração.
+   - `SESSION_SECRET` — uma string aleatória (gere com `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"`)
 2. Instale e prepare o banco:
 
 ```bash
@@ -52,9 +55,7 @@ git push -u origin master
 
 1. Em https://vercel.com/new, importe o repositório recém-criado.
 2. Framework preset: Next.js (detectado automaticamente).
-3. Em **Environment Variables**, adicione:
-   - `DATABASE_URL` — a mesma connection string do Supabase (porta 6543, `?pgbouncer=true`)
-   - `SESSION_SECRET` — uma string aleatória longa (gere com `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"`)
+3. Em **Environment Variables**, adicione `DATABASE_URL`, `DIRECT_URL` e `SESSION_SECRET` (mesmos valores da seção acima) — marque **Production** e **Preview**, e deixe como variável normal, não "Sensitive"/"Secret" (esse tipo é write-only e dificulta debugar se algo estiver errado).
 4. Deploy.
 
 O comando de build (`package.json` → `build`) já roda `prisma generate && prisma migrate deploy && next build`, ou seja, **a cada deploy as migrations pendentes são aplicadas automaticamente** no banco do Supabase. Isso é intencional e simples para este projeto, mas significa que o build falha se `DATABASE_URL` não estiver configurada corretamente.

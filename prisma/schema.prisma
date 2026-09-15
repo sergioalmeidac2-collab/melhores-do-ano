@@ -3,7 +3,16 @@
 //
 // Postgres (Supabase), tanto em dev quanto em produção, para evitar
 // divergências de comportamento entre ambientes (enums, tipos de data etc).
-// DATABASE_URL vem do .env — aponte para o seu projeto Supabase.
+//
+// Duas connection strings, porque o pooler do Supabase (Supavisor, modo
+// "Transaction", porta 6543) não suporta os locks de sessão que o Prisma
+// Migrate precisa — usar só o pooler faz `prisma migrate deploy` travar ou
+// falhar de forma imprevisível:
+//   DATABASE_URL -> pooler (6543), usado pela aplicação em runtime (serverless)
+//   DIRECT_URL   -> conexão direta (5432), usado só por `prisma migrate deploy`
+// Ambos vêm do mesmo projeto Supabase (Settings -> Database -> Connection
+// string): DATABASE_URL da aba "Transaction", DIRECT_URL da aba "Session"
+// ou "Direct connection".
 // ----------------------------------------------------------------------------
 
 generator client {
@@ -11,8 +20,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // votingStatus e status abaixo são String (não enum do Prisma) com os valores
