@@ -13,12 +13,38 @@ interface Category {
   _count: { companies: number; votes: number };
 }
 
+// Taxonomia real de categorias usada em concursos "Melhores do Ano" municipais
+// (referência: melhoresdoano.vercel.app, edição Barretos-SP 2024). Serve como
+// ponto de partida editável — nada aqui é criado automaticamente, o admin
+// revisa e importa só o que quiser pelo botão abaixo.
+const CATEGORY_SUGGESTIONS = [
+  'Academia de Luta', 'Academia', 'Acessórios Automotivos', 'Acessórios para Celulares',
+  'Adestrador(a) de Cães', 'Administradora de Condomínios', 'Algodão Doce', 'Aluguel de Brinquedos',
+  'Assessoria Esportiva', 'Assistência Técnica em Celulares', 'Auto Elétrica', 'Auto Peças',
+  'Banho e Tosa', 'Bar / Pub', 'Barbeiro(a)', 'Bartender', 'Body Piercing', 'Cabeleireiro(a)',
+  'Cantor(a)', 'Carrinho de Pipoca', 'Casa de Assados', 'Cerimonialista', 'Chefe de Cozinha',
+  'Churrasqueiro(a)', 'Clínica Especializada em Emagrecimento', 'Clínica Veterinária',
+  'Condutor(a) Escolar', 'Consultoria de RH', 'Contador(a)', 'Corretor(a) de Seguros',
+  'Decorador(a) de Festas e Eventos', 'Despachante', 'DJ', 'Escritório de Contabilidade',
+  'Fotógrafo(a)', 'Funilaria e Pintura', 'Garçom / Garçonete', 'Hamburgueria',
+  'Higienização de Estofados', 'Influenciador(a) Digital', 'Locutor(a)',
+  'Loja de Canecas Personalizadas', 'Manicure e Pedicure', 'Montador(a) de Móveis',
+  'Médico(a) Veterinário(a)', 'Papelaria Personalizada', 'Pastelaria', 'Pizzaria',
+  'Profissional de Harmonização Facial', 'Página de Instagram/Facebook (Notícias)',
+  'Segurança', 'Seguro Veicular',
+];
+
 export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', description: '', emoji: '🏆' });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkText, setBulkText] = useState(CATEGORY_SUGGESTIONS.join('\n'));
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   function load() {
     fetch('/api/admin/categories')
@@ -65,6 +91,30 @@ export default function AdminCategoriesPage() {
     load();
   }
 
+  async function importBulk() {
+    const names = bulkText
+      .split('\n')
+      .map((n) => n.trim())
+      .filter(Boolean);
+    if (names.length === 0) return;
+
+    setBulkSaving(true);
+    setBulkResult(null);
+    const res = await fetch('/api/admin/categories/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names }),
+    });
+    const data = await res.json();
+    setBulkSaving(false);
+    if (!res.ok) {
+      setBulkResult(data.error ?? 'Erro ao importar.');
+      return;
+    }
+    setBulkResult(`${data.created} categoria(s) criada(s), ${data.skipped} já existiam e foram ignoradas.`);
+    load();
+  }
+
   return (
     <div className="space-y-8 max-w-3xl">
       <h1 className="font-display text-2xl font-bold">Categorias</h1>
@@ -97,6 +147,40 @@ export default function AdminCategoriesPage() {
           {saving ? 'Salvando...' : 'Adicionar categoria'}
         </button>
       </form>
+
+      <div className="bg-ink-800/60 border border-ink-700 rounded-2xl p-5 space-y-4">
+        <button
+          type="button"
+          onClick={() => setShowBulkImport((s) => !s)}
+          className="text-sm text-gold-400 hover:underline"
+        >
+          {showBulkImport ? 'Ocultar' : 'Importar várias categorias de uma vez'}
+        </button>
+
+        {showBulkImport && (
+          <div className="space-y-3">
+            <p className="text-ink-400 text-xs">
+              Uma categoria por linha. Já vem preenchido com uma lista de referência de categorias reais usadas em
+              concursos "Melhores do Ano" — edite à vontade antes de importar (remova o que não usar, adicione o
+              que faltar). Categorias com o mesmo nome de uma já existente são ignoradas.
+            </p>
+            <textarea
+              className="input min-h-[200px] font-mono text-xs"
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+            />
+            {bulkResult && <p className="text-sm text-ink-300">{bulkResult}</p>}
+            <button
+              type="button"
+              onClick={importBulk}
+              disabled={bulkSaving}
+              className="btn-secondary disabled:opacity-60"
+            >
+              {bulkSaving ? 'Importando...' : 'Importar lista'}
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="space-y-3">
         {loading && <p className="text-ink-400">Carregando...</p>}

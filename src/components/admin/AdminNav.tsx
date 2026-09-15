@@ -8,6 +8,7 @@ const links = [
   { href: '/admin/categorias', label: 'Categorias' },
   { href: '/admin/empresas', label: 'Empresas' },
   { href: '/admin/votos', label: 'Votos' },
+  { href: '/admin/instagram', label: 'Votos via Instagram' },
   { href: '/admin/origens', label: 'Origens / QR Code' },
   { href: '/admin/configuracoes', label: 'Configurações' },
 ];

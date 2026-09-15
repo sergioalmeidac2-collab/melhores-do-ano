@@ -33,6 +33,8 @@ Todo o conteúdo (categorias, empresas, textos do evento, status da votação) �
 2. Criar empresas e associá-las a categorias em `/admin/empresas`
 3. Abrir a votação em `/admin/configuracoes` (Status da votação → "Aberta")
 
+Para acelerar o cadastro de categorias, `/admin/categorias` tem um botão "Importar várias categorias de uma vez" pré-preenchido com uma lista de referência de ~50 categorias reais usadas em concursos "Melhores do Ano" municipais (ex: Barbeiro(a), Pizzaria, Contador(a), Clínica Veterinária) — edite a lista antes de importar, nada é criado sem essa confirmação manual.
+
 ## Publicando: GitHub → Vercel → Supabase
 
 ### 1. Subir o código para o GitHub
@@ -66,6 +68,23 @@ npm run seed
 ```
 
 Ou defina `ADMIN_EMAIL` e `ADMIN_PASSWORD` no ambiente antes de rodar, para não usar as credenciais padrão.
+
+## Votação por comentários do Instagram (canal alternativo)
+
+Além da votação por formulário web (canal principal), o painel tem uma tela em `/admin/instagram` para lidar com concursos que também recebem votos por **comentário no Instagram** (padrão comum em concursos "Melhores do Ano" municipais: o público comenta mencionando o @ da empresa no post).
+
+Como não há integração automática com a Instagram Graph API nesta versão (exigiria app da Meta aprovado + conta comercial do cliente conectada), o fluxo é manual:
+
+1. Cadastre o @Instagram de cada empresa em `/admin/empresas`.
+2. Exporte ou copie os comentários do post da categoria.
+3. Cole em `/admin/instagram` no formato `usuario: comentário` (uma linha por comentário).
+4. O sistema classifica cada comentário — válido, voto múltiplo (mesmo usuário comentou mais de uma vez), múltiplas menções (ambíguo), sem menção, ou com texto além do voto — e monta o ranking só com os votos válidos.
+
+Isso é independente da votação por formulário: os dois canais não se misturam nem competem pelo mesmo limite de "1 voto por categoria".
+
+### Evoluir para importação automática
+
+Para tirar o "colar manual" do caminho, o passo seguinte seria: criar um app na Meta for Developers, conectar a conta comercial do Instagram do cliente, pedir os escopos `instagram_basic` e `instagram_manage_comments`, passar pela revisão de app da Meta, e assinar um webhook de comentários que chama `parseCommentsBlock`/`classifyComments` (já prontos em `src/lib/instagramVotes.ts`) automaticamente a cada comentário novo, em vez de depender do admin colar texto.
 
 ## Arquitetura
 

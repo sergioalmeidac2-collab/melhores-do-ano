@@ -63,6 +63,7 @@ model Category {
 
   companies CategoryCompany[]
   votes     Vote[]
+  instagramCommentVotes InstagramCommentVote[]
 
   @@index([active, order])
 }
@@ -81,6 +82,7 @@ model Company {
 
   categories CategoryCompany[]
   votes      Vote[]
+  instagramCommentVotes InstagramCommentVote[]
 }
 
 // Junction table: uma empresa pode participar de várias categorias
@@ -176,6 +178,30 @@ model BlockedSession {
   sessionId String   @unique
   reason    String?
   createdAt DateTime @default(now())
+}
+
+// Análise de votação por comentários do Instagram — canal alternativo/manual,
+// inspirado em como concursos "Melhores do Ano" costumam rodar por lá: a
+// organização publica um post por categoria e o público vota comentando e
+// mencionando o @ da empresa. Como não temos acesso à Instagram Graph API
+// (exige app da Meta aprovado + conta comercial do cliente), o admin cola os
+// comentários manualmente (exportados do Instagram ou copiados à mão) e o
+// sistema classifica cada um. Ver README para o caminho de evolução para
+// importação automática via webhook quando o cliente tiver o app da Meta.
+model InstagramCommentVote {
+  id             String   @id @default(cuid())
+  categoryId     String
+  companyId      String? // null quando não foi possível identificar uma menção válida
+  username       String // @ de quem comentou
+  rawText        String
+  status         String // "VALID" | "MULTIPLE_VOTE" | "MULTIPLE_MENTION" | "NO_MENTION" | "EXTRA_TEXT"
+  createdAt      DateTime @default(now())
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  company  Company? @relation(fields: [companyId], references: [id])
+
+  @@index([categoryId, status])
+  @@index([categoryId, username])
 }
 
 model AuditLog {

@@ -148,6 +148,19 @@ CREATE TABLE "BlockedSession" (
 );
 
 -- CreateTable
+CREATE TABLE "InstagramCommentVote" (
+    "id" TEXT NOT NULL,
+    "categoryId" TEXT NOT NULL,
+    "companyId" TEXT,
+    "username" TEXT NOT NULL,
+    "rawText" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "InstagramCommentVote_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AuditLog" (
     "id" TEXT NOT NULL,
     "adminId" TEXT,
@@ -202,6 +215,12 @@ CREATE UNIQUE INDEX "BlockedPhone_phone_key" ON "BlockedPhone"("phone");
 -- CreateIndex
 CREATE UNIQUE INDEX "BlockedSession_sessionId_key" ON "BlockedSession"("sessionId");
 
+-- CreateIndex
+CREATE INDEX "InstagramCommentVote_categoryId_status_idx" ON "InstagramCommentVote"("categoryId", "status");
+
+-- CreateIndex
+CREATE INDEX "InstagramCommentVote_categoryId_username_idx" ON "InstagramCommentVote"("categoryId", "username");
+
 -- AddForeignKey
 ALTER TABLE "CategoryCompany" ADD CONSTRAINT "CategoryCompany_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -219,6 +238,12 @@ ALTER TABLE "Vote" ADD CONSTRAINT "Vote_participantId_fkey" FOREIGN KEY ("partic
 
 -- AddForeignKey
 ALTER TABLE "Vote" ADD CONSTRAINT "Vote_voteSourceId_fkey" FOREIGN KEY ("voteSourceId") REFERENCES "VoteSource"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "InstagramCommentVote" ADD CONSTRAINT "InstagramCommentVote_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "InstagramCommentVote" ADD CONSTRAINT "InstagramCommentVote_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "Admin"("id") ON DELETE SET NULL ON UPDATE CASCADE;
