@@ -187,7 +187,13 @@ export async function POST(req: Request) {
     where: { participantId_categoryId: { participantId: participant.id, categoryId: category.id } },
   });
 
-  if (existingVote) {
+  // Pular não é definitivo: quem pulou pode voltar depois e votar de verdade
+  // (é literalmente o que a tela de sucesso promete). Só bloqueia de novo se
+  // a nova tentativa também for um "pular", ou se já existir um voto real
+  // (VALID/SUSPICIOUS) — esse sim é definitivo.
+  const canConvertSkipToVote = existingVote?.status === 'SKIPPED' && !data.skip;
+
+  if (existingVote && !canConvertSkipToVote) {
     const message =
       existingVote.status === 'SKIPPED'
         ? 'Você já pulou esta categoria.'
@@ -195,25 +201,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 409 });
   }
 
-  const vote = await prisma.vote.create({
-    data: {
-      categoryId: category.id,
-      companyId: company?.id ?? null,
-      participantId: participant.id,
-      voteSourceId,
-      utmSource: data.utmSource || null,
-      utmMedium: data.utmMedium || null,
-      utmCampaign: data.utmCampaign || null,
-      utmContent: data.utmContent || null,
-      utmTerm: data.utmTerm || null,
-      ipHash,
-      userAgent: req.headers.get('user-agent') ?? null,
-      sessionId: data.sessionId,
-      status: data.skip ? 'SKIPPED' : tooFast ? 'SUSPICIOUS' : 'VALID',
-      consentTerms: data.consentTerms,
-      consentMarketing: data.consentMarketing,
-    },
-  });
+  const voteData = {
+    companyId: company?.id ?? null,
+    voteSourceId,
+    utmSource: data.utmSource || null,
+    utmMedium: data.utmMedium || null,
+    utmCampaign: data.utmCampaign || null,
+    utmContent: data.utmContent || null,
+    utmTerm: data.utmTerm || null,
+    ipHash,
+    userAgent: req.headers.get('user-agent') ?? null,
+    sessionId: data.sessionId,
+    status: data.skip ? 'SKIPPED' : tooFast ? 'SUSPICIOUS' : 'VALID',
+    consentTerms: data.consentTerms,
+    consentMarketing: data.consentMarketing,
+  };
+
+  const vote = canConvertSkipToVote
+    ? await prisma.vote.update({ where: { id: existingVote!.id }, data: voteData })
+    : await prisma.vote.create({
+        data: { categoryId: category.id, participantId: participant.id, ...voteData },
+      });
 
   return NextResponse.json({ success: true, voteId: vote.id, skipped: data.skip });
 }
