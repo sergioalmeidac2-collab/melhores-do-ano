@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -10,12 +11,27 @@ const links = [
   { href: '/admin/votos', label: 'Votos' },
   { href: '/admin/instagram', label: 'Votos via Instagram' },
   { href: '/admin/origens', label: 'Origens / QR Code' },
+];
+
+// Só o papel "admin" (dono da conta) vê e acessa isso — "editor" (admin da
+// cidade) cuida do dia a dia mas não mexe em configurações globais nem em
+// outros acessos.
+const superAdminLinks = [
   { href: '/admin/configuracoes', label: 'Configurações' },
+  { href: '/admin/administradores', label: 'Administradores' },
 ];
 
 export function AdminNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/me')
+      .then((r) => r.json())
+      .then((d) => setRole(d.role ?? null))
+      .catch(() => setRole(null));
+  }, []);
 
   async function logout() {
     await fetch('/api/admin/logout', { method: 'POST' });
@@ -23,10 +39,12 @@ export function AdminNav() {
     router.refresh();
   }
 
+  const visibleLinks = role === 'admin' ? [...links, ...superAdminLinks] : links;
+
   return (
     <nav className="sm:w-60 shrink-0 bg-ink-900 border-b sm:border-b-0 sm:border-r border-ink-800 p-4 sm:p-6 flex sm:flex-col gap-1 overflow-x-auto">
       <p className="font-display font-bold text-lg mb-2 hidden sm:block px-2">Melhores do Ano</p>
-      {links.map((link) => {
+      {visibleLinks.map((link) => {
         const active = pathname === link.href;
         return (
           <Link

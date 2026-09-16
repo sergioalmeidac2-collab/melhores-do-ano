@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Settings {
   id: string;
@@ -15,15 +16,21 @@ interface Settings {
 }
 
 export default function AdminSettingsPage() {
+  const router = useRouter();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    fetch('/api/admin/me')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.role !== 'admin') router.replace('/admin');
+      });
     fetch('/api/admin/settings')
       .then((r) => r.json())
       .then((d) => setSettings(d.settings));
-  }, []);
+  }, [router]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();

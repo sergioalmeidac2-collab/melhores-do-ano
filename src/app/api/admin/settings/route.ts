@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireAdmin, requireSuperAdmin } from '@/lib/requireAdmin';
 
 export async function GET() {
   const { error } = await requireAdmin();
@@ -31,7 +31,7 @@ const updateSchema = z.object({
 });
 
 export async function PUT(req: Request) {
-  const { error } = await requireAdmin();
+  const { error } = await requireSuperAdmin();
   if (error) return error;
 
   const json = await req.json().catch(() => null);
