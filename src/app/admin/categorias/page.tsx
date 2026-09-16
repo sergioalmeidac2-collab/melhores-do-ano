@@ -106,6 +106,11 @@ export default function AdminCategoriesPage() {
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
 
+  const [optionsPanelId, setOptionsPanelId] = useState<string | null>(null);
+  const [panelOptions, setPanelOptions] = useState<string[]>(['']);
+  const [panelSaving, setPanelSaving] = useState(false);
+  const [panelResult, setPanelResult] = useState<string | null>(null);
+
   function load() {
     fetch('/api/admin/categories')
       .then((r) => r.json())
@@ -188,6 +193,54 @@ export default function AdminCategoriesPage() {
   async function remove(cat: Category) {
     if (!confirm(`Excluir/desativar a categoria "${cat.name}"?`)) return;
     await fetch(`/api/admin/categories/${cat.id}`, { method: 'DELETE' });
+    load();
+  }
+
+  function toggleOptionsPanel(catId: string) {
+    if (optionsPanelId === catId) {
+      setOptionsPanelId(null);
+    } else {
+      setOptionsPanelId(catId);
+      setPanelOptions(['']);
+      setPanelResult(null);
+    }
+  }
+
+  function updatePanelOption(index: number, value: string) {
+    setPanelOptions((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      if (index === next.length - 1 && value.trim() !== '') next.push('');
+      return next;
+    });
+  }
+
+  function removePanelOption(index: number) {
+    setPanelOptions((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length === 0 ? [''] : next;
+    });
+  }
+
+  async function submitPanelOptions(catId: string) {
+    const names = panelOptions.map((o) => o.trim()).filter(Boolean);
+    if (names.length === 0) return;
+
+    setPanelSaving(true);
+    setPanelResult(null);
+    const res = await fetch(`/api/admin/categories/${catId}/options`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names }),
+    });
+    const data = await res.json();
+    setPanelSaving(false);
+    if (!res.ok) {
+      setPanelResult(data.error ?? 'Erro ao adicionar opções.');
+      return;
+    }
+    setPanelResult(`${data.created} opção(ões) adicionada(s).`);
+    setPanelOptions(['']);
     load();
   }
 
@@ -338,42 +391,84 @@ export default function AdminCategoriesPage() {
       <div className="space-y-3">
         {loading && <p className="text-ink-400">Carregando...</p>}
         {categories.map((cat) => (
-          <div
-            key={cat.id}
-            className="bg-ink-800/60 border border-ink-700 rounded-xl p-4 flex items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              {cat.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={cat.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
-              ) : (
-                <span className="text-2xl">{cat.emoji}</span>
-              )}
-              <div className="min-w-0">
-                <p className="font-medium truncate">{cat.name}</p>
-                <p className="text-xs text-ink-500">
-                  {cat._count.companies} empresas · {cat._count.votes} votos
-                </p>
+          <div key={cat.id} className="bg-ink-800/60 border border-ink-700 rounded-xl p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                {cat.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={cat.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                ) : (
+                  <span className="text-2xl">{cat.emoji}</span>
+                )}
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{cat.name}</p>
+                  <p className="text-xs text-ink-500">
+                    {cat._count.companies} empresas · {cat._count.votes} votos
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => toggleOptionsPanel(cat.id)}
+                  className="text-xs text-gold-400 hover:underline"
+                >
+                  {optionsPanelId === cat.id ? 'Fechar' : '+ Opções'}
+                </button>
+                <button
+                  onClick={() => toggleActive(cat)}
+                  className={`text-xs px-2.5 py-1 rounded-full border ${
+                    cat.active
+                      ? 'border-green-500/40 text-green-400'
+                      : 'border-ink-600 text-ink-400'
+                  }`}
+                >
+                  {cat.active ? 'Ativa' : 'Inativa'}
+                </button>
+                <button onClick={() => startEdit(cat)} className="text-xs text-gold-400 hover:underline">
+                  Editar
+                </button>
+                <button onClick={() => remove(cat)} className="text-xs text-red-400 hover:underline">
+                  Excluir
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => toggleActive(cat)}
-                className={`text-xs px-2.5 py-1 rounded-full border ${
-                  cat.active
-                    ? 'border-green-500/40 text-green-400'
-                    : 'border-ink-600 text-ink-400'
-                }`}
-              >
-                {cat.active ? 'Ativa' : 'Inativa'}
-              </button>
-              <button onClick={() => startEdit(cat)} className="text-xs text-gold-400 hover:underline">
-                Editar
-              </button>
-              <button onClick={() => remove(cat)} className="text-xs text-red-400 hover:underline">
-                Excluir
-              </button>
-            </div>
+
+            {optionsPanelId === cat.id && (
+              <div className="mt-4 pt-4 border-t border-ink-700 space-y-2">
+                <p className="text-xs text-ink-400 mb-2">
+                  Adicionar empresas (opções) a "{cat.name}" — uma por campo, o próximo aparece sozinho.
+                </p>
+                {panelOptions.map((opt, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      className="input"
+                      placeholder={i === panelOptions.length - 1 ? 'Adicionar outra opção...' : `Opção ${i + 1}`}
+                      value={opt}
+                      onChange={(e) => updatePanelOption(i, e.target.value)}
+                    />
+                    {panelOptions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePanelOption(i)}
+                        className="text-ink-500 hover:text-red-400 px-2"
+                        aria-label="Remover opção"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {panelResult && <p className="text-sm text-ink-300">{panelResult}</p>}
+                <button
+                  type="button"
+                  onClick={() => submitPanelOptions(cat.id)}
+                  disabled={panelSaving}
+                  className="btn-secondary disabled:opacity-60"
+                >
+                  {panelSaving ? 'Salvando...' : 'Salvar opções'}
+                </button>
+              </div>
+            )}
           </div>
         ))}
         {!loading && categories.length === 0 && (
