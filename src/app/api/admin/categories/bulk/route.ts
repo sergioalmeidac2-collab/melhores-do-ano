@@ -5,7 +5,7 @@ import { requireAdmin } from '@/lib/requireAdmin';
 import { slugify } from '@/lib/slug';
 
 const bulkSchema = z.object({
-  names: z.array(z.string().trim().min(2).max(120)).min(1).max(200),
+  names: z.array(z.string().trim().min(2).max(120)).min(1).max(1000),
 });
 
 // Cria várias categorias de uma vez (uma por nome), pulando as que já existem
