@@ -41,6 +41,7 @@ model EventSettings {
   eventName     String       @default("Melhores do Ano")
   eventYear     Int          @default(2026)
   city          String       @default("")
+  state         String       @default("")
   logoUrl       String?
   heroTitle     String       @default("MELHORES DO ANO")
   heroSubtitle  String       @default("Escolha as empresas que mais se destacaram na sua cidade.")
@@ -92,6 +93,10 @@ model Company {
   instagram   String?
   phone       String?
   active      Boolean  @default(true)
+  // false quando a empresa foi criada por um votante digitando um nome que
+  // não estava na lista ("escreva a sua opção") — fica invisível na votação
+  // pública até o admin aprovar em /admin/empresas.
+  approved    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

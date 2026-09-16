@@ -11,6 +11,7 @@ const updateSchema = z.object({
   instagram: z.string().max(60).optional().nullable(),
   phone: z.string().max(30).optional().nullable(),
   active: z.boolean().optional(),
+  approved: z.boolean().optional(),
   categoryIds: z.array(z.string()).optional(),
 });
 

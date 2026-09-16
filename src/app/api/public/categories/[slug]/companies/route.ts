@@ -11,7 +11,7 @@ export async function GET(_req: Request, { params }: { params: { slug: string } 
   }
 
   const links = await prisma.categoryCompany.findMany({
-    where: { categoryId: category.id, company: { active: true } },
+    where: { categoryId: category.id, company: { active: true, approved: true } },
     orderBy: { order: 'asc' },
     include: { company: true },
   });

@@ -4,10 +4,14 @@ import { prisma } from '@/lib/prisma';
 import { validateAndNormalizeBrazilPhone } from '@/lib/phone';
 import { normalizeInstagram } from '@/lib/instagram';
 import { checkRateLimit, getClientIp, hashIp, isPhoneBlocked, isSessionBlocked } from '@/lib/fraud';
+import { slugify } from '@/lib/slug';
 
 const voteSchema = z.object({
   categorySlug: z.string().min(1),
   companySlug: z.string().min(1).optional(),
+  // "escreva sua opção": voto em uma empresa que ainda não está cadastrada
+  // nesta categoria. Cria a empresa como pendente de aprovação do admin.
+  newCompanyName: z.string().trim().min(2).max(160).optional(),
   skip: z.boolean().optional().default(false),
   name: z.string().trim().min(3, 'Informe seu nome completo.').max(120),
   phone: z.string().min(10),
@@ -101,19 +105,50 @@ export async function POST(req: Request) {
 
   let company: Awaited<ReturnType<typeof prisma.company.findUnique>> = null;
   if (!data.skip) {
-    if (!data.companySlug) {
-      return NextResponse.json({ error: 'Escolha uma empresa ou pule a categoria.' }, { status: 400 });
-    }
-    company = await prisma.company.findUnique({ where: { slug: data.companySlug } });
-    if (!company || !company.active) {
-      return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 });
-    }
+    if (data.companySlug) {
+      company = await prisma.company.findUnique({ where: { slug: data.companySlug } });
+      if (!company || !company.active) {
+        return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 });
+      }
 
-    const link = await prisma.categoryCompany.findUnique({
-      where: { categoryId_companyId: { categoryId: category.id, companyId: company.id } },
-    });
-    if (!link) {
-      return NextResponse.json({ error: 'Essa empresa não participa dessa categoria.' }, { status: 400 });
+      const link = await prisma.categoryCompany.findUnique({
+        where: { categoryId_companyId: { categoryId: category.id, companyId: company.id } },
+      });
+      if (!link) {
+        return NextResponse.json({ error: 'Essa empresa não participa dessa categoria.' }, { status: 400 });
+      }
+    } else if (data.newCompanyName) {
+      // Reaproveita se já existe (aprovada ou pendente) uma empresa com esse
+      // nome nesta categoria, em vez de criar duplicata a cada voto.
+      const existingLink = await prisma.categoryCompany.findFirst({
+        where: {
+          categoryId: category.id,
+          company: { name: { equals: data.newCompanyName, mode: 'insensitive' } },
+        },
+        include: { company: true },
+      });
+
+      if (existingLink) {
+        company = existingLink.company;
+      } else {
+        const base = slugify(data.newCompanyName);
+        let slug = base;
+        let n = 1;
+        while (await prisma.company.findUnique({ where: { slug } })) {
+          n += 1;
+          slug = `${base}-${n}`;
+        }
+        company = await prisma.company.create({
+          data: {
+            name: data.newCompanyName,
+            slug,
+            approved: false,
+            categories: { create: { categoryId: category.id } },
+          },
+        });
+      }
+    } else {
+      return NextResponse.json({ error: 'Escolha uma empresa ou pule a categoria.' }, { status: 400 });
     }
   }
 

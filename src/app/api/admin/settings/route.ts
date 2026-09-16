@@ -18,6 +18,7 @@ const updateSchema = z.object({
   eventName: z.string().min(2).max(120).optional(),
   eventYear: z.number().int().optional(),
   city: z.string().max(120).optional(),
+  state: z.string().max(2).optional(),
   logoUrl: z.string().url().optional().nullable().or(z.literal('')),
   heroTitle: z.string().max(160).optional(),
   heroSubtitle: z.string().max(300).optional(),

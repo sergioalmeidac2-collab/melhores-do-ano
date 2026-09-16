@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/requireAdmin';
 import { slugify } from '@/lib/slug';
+import { guessCategoryEmoji } from '@/lib/categoryEmoji';
 
 const bulkSchema = z.object({
   names: z.array(z.string().trim().min(2).max(120)).min(1).max(1000),
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       slug = `${base}-${n}`;
     }
     await prisma.category.create({
-      data: { name, slug, order: nextOrder },
+      data: { name, slug, order: nextOrder, emoji: guessCategoryEmoji(name) },
     });
     nextOrder += 1;
     created += 1;

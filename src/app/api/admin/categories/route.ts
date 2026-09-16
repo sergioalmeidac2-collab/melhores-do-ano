@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/requireAdmin';
 import { slugify } from '@/lib/slug';
+import { guessCategoryEmoji } from '@/lib/categoryEmoji';
 
 export async function GET() {
   const { error } = await requireAdmin();
@@ -61,7 +62,10 @@ export async function POST(req: Request) {
       slug,
       description: parsed.data.description || null,
       imageUrl: parsed.data.imageUrl || null,
-      emoji: parsed.data.emoji || '🏆',
+      emoji:
+        parsed.data.emoji && parsed.data.emoji !== '🏆'
+          ? parsed.data.emoji
+          : guessCategoryEmoji(parsed.data.name),
       active: parsed.data.active,
       order: (maxOrder._max.order ?? 0) + 1,
     },

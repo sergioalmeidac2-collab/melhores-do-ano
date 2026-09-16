@@ -8,6 +8,7 @@ interface Settings {
   eventName: string;
   eventYear: number;
   city: string;
+  state: string;
   heroTitle: string;
   heroSubtitle: string;
   votesPerCategory: number;
@@ -72,13 +73,29 @@ export default function AdminSettingsPage() {
             />
           </Field>
         </div>
-        <Field label="Cidade">
-          <input
-            className="input"
-            value={settings.city}
-            onChange={(e) => setSettings({ ...settings, city: e.target.value })}
-          />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Cidade">
+            <input
+              className="input"
+              value={settings.city}
+              onChange={(e) => setSettings({ ...settings, city: e.target.value })}
+              placeholder="Ex: Perdizes"
+            />
+          </Field>
+          <Field label="Estado (UF)">
+            <input
+              className="input"
+              value={settings.state}
+              maxLength={2}
+              onChange={(e) => setSettings({ ...settings, state: e.target.value.toUpperCase() })}
+              placeholder="Ex: MG"
+            />
+          </Field>
+        </div>
+        <p className="text-ink-500 text-xs">
+          Cidade e estado identificam esta votação — útil para quando cada cidade tiver sua própria página
+          (ex: melhoresdoano2026.com.br/perdizes-mg) numa próxima etapa do sistema.
+        </p>
       </div>
 
       <div className="bg-ink-800/60 border border-ink-700 rounded-2xl p-5 space-y-4">

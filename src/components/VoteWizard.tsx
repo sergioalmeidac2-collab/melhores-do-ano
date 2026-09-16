@@ -72,6 +72,8 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [formRenderedAt, setFormRenderedAt] = useState<number>(0);
   const [skipMode, setSkipMode] = useState(false);
+  const [writeInInput, setWriteInInput] = useState('');
+  const [writeInName, setWriteInName] = useState<string | null>(null);
   const [knownParticipant, setKnownParticipant] = useState<KnownParticipant | null>(null);
   const isKnownParticipant = !!knownParticipant;
 
@@ -131,11 +133,31 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
   // Já sabemos quem é (login por telefone em /minha-votacao ou voto anterior
   // nesta mesma sessão) — não faz sentido pedir nome/telefone/termos de novo
-  // a cada categoria, então pulamos direto a etapa de identificação.
-  const canSkipIdentifyStep = isKnownParticipant && !!form.consentTerms;
+  // a cada categoria, então pulamos direto a etapa de identificação. Não
+  // depende de um "consentTerms" salvo no navegador: se existe um cadastro
+  // salvo (nome+telefone), é porque essa pessoa já aceitou os termos alguma
+  // vez para o cadastro existir — mesmo que tenha sido salvo antes desta
+  // marcação existir no localStorage de navegadores mais antigos.
+  const canSkipIdentifyStep = isKnownParticipant;
 
   function chooseCompany(company: Company) {
     setSelectedCompany(company);
+    setWriteInName(null);
+    setSkipMode(false);
+    setFormRenderedAt(Date.now());
+    if (canSkipIdentifyStep) {
+      setStep('confirm');
+    } else {
+      setStep('identify');
+    }
+  }
+
+  function chooseWriteIn(e: React.FormEvent) {
+    e.preventDefault();
+    const name = writeInInput.trim();
+    if (name.length < 2) return;
+    setSelectedCompany(null);
+    setWriteInName(name);
     setSkipMode(false);
     setFormRenderedAt(Date.now());
     if (canSkipIdentifyStep) {
@@ -147,6 +169,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
   function skipCategory() {
     setSelectedCompany(null);
+    setWriteInName(null);
     setSkipMode(true);
     setFormRenderedAt(Date.now());
     if (canSkipIdentifyStep) {
@@ -180,7 +203,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
   async function submitVote(skip: boolean) {
     if (!category) return;
-    if (!skip && !selectedCompany) return;
+    if (!skip && !selectedCompany && !writeInName) return;
     setSubmitting(true);
     setErrorMessage(null);
 
@@ -191,6 +214,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
         body: JSON.stringify({
           categorySlug: category.slug,
           companySlug: selectedCompany?.slug,
+          newCompanyName: writeInName ?? undefined,
           skip,
           name: form.name.trim(),
           phone: form.phone,
@@ -199,7 +223,10 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
           city: form.city || null,
           neighborhood: form.neighborhood || null,
           howFoundOut: form.howFoundOut || null,
-          consentTerms: form.consentTerms,
+          // se já é um participante conhecido, ele aceitou os termos em
+          // algum momento anterior para o cadastro existir — não depende do
+          // checkbox estar marcado nesta renderização específica.
+          consentTerms: isKnownParticipant ? true : form.consentTerms,
           consentMarketing: form.consentMarketing,
           website: form.website,
           formRenderedAt,
@@ -264,7 +291,8 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
       {step === 'choose-company' && category && (
         <div className="animate-fade-in-up">
           <div className="relative w-full h-40 sm:h-52 rounded-2xl overflow-hidden mb-6">
-            <Image src={getCategoryImageUrl(category)} alt="" fill className="object-cover" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={getCategoryImageUrl(category)} alt="" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/10 to-transparent" />
           </div>
           {errorMessage && (
@@ -319,6 +347,22 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
             <p className="text-center text-ink-400">Nenhuma empresa cadastrada nesta categoria ainda.</p>
           )}
 
+          <form onSubmit={chooseWriteIn} className="mt-6 bg-ink-800/40 border border-dashed border-ink-700 rounded-2xl p-4">
+            <p className="text-ink-400 text-xs mb-2">Não encontrou quem procurava? Digite o nome:</p>
+            <div className="flex gap-2">
+              <input
+                className="input"
+                value={writeInInput}
+                onChange={(e) => setWriteInInput(e.target.value)}
+                placeholder="Nome da empresa"
+                maxLength={160}
+              />
+              <button type="submit" className="btn-secondary shrink-0" disabled={writeInInput.trim().length < 2}>
+                Votar nesse nome
+              </button>
+            </div>
+          </form>
+
           <div className="text-center mt-8">
             <button
               type="button"
@@ -332,7 +376,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
         </div>
       )}
 
-      {step === 'identify' && category && (skipMode || selectedCompany) && (
+      {step === 'identify' && category && (skipMode || selectedCompany || writeInName) && (
         <form onSubmit={handleIdentifySubmit} className="animate-fade-in-up space-y-5">
           <h1 className="font-display text-3xl font-bold text-center mb-1">Identifique-se</h1>
           <p className="text-ink-300 text-center mb-8">
@@ -340,7 +384,8 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
               <>Confirme seus dados para pular esta categoria.</>
             ) : (
               <>
-                Seu voto em <span className="text-gold-300 font-medium">{selectedCompany?.name}</span> quase
+                Seu voto em{' '}
+                <span className="text-gold-300 font-medium">{selectedCompany?.name ?? writeInName}</span> quase
                 concluído.
               </>
             )}
@@ -472,14 +517,14 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
         </form>
       )}
 
-      {step === 'confirm' && category && selectedCompany && (
+      {step === 'confirm' && category && (selectedCompany || writeInName) && (
         <div className="animate-fade-in-up space-y-6">
           <h1 className="font-display text-3xl font-bold text-center mb-1">Confirme seu voto</h1>
           <p className="text-ink-300 text-center mb-6">Revise as informações antes de confirmar.</p>
 
           <div className="bg-ink-800/60 border border-ink-700 rounded-2xl p-6 space-y-4">
             <SummaryRow label="Categoria" value={`${category.emoji} ${category.name}`} />
-            <SummaryRow label="Escolha" value={selectedCompany.name} />
+            <SummaryRow label="Escolha" value={selectedCompany?.name ?? writeInName ?? ''} />
             <SummaryRow label="Nome" value={form.name} />
             <SummaryRow label="WhatsApp" value={form.phone} />
             {form.instagram && <SummaryRow label="Instagram" value={form.instagram} />}
@@ -503,7 +548,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
         </div>
       )}
 
-      {step === 'success' && category && (skipMode || selectedCompany) && (
+      {step === 'success' && category && (skipMode || selectedCompany || writeInName) && (
         <div className="animate-fade-in-up flex flex-col items-center text-center gap-5 py-10">
           <div className="w-20 h-20 rounded-full bg-gold-500/10 border-2 border-gold-400 flex items-center justify-center text-4xl pulse-ring">
             {skipMode ? '⏭️' : '🏆'}
@@ -520,7 +565,8 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
             ) : (
               <>
                 Obrigado por participar do Melhores do Ano. Seu voto em{' '}
-                <span className="text-gold-300 font-medium">{selectedCompany?.name}</span> na categoria{' '}
+                <span className="text-gold-300 font-medium">{selectedCompany?.name ?? writeInName}</span> na
+                categoria{' '}
                 <span className="text-gold-300 font-medium">{category.name}</span> foi confirmado.
               </>
             )}

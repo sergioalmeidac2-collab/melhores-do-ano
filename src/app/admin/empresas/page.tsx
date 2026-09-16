@@ -16,6 +16,7 @@ interface Company {
   instagram: string | null;
   phone: string | null;
   active: boolean;
+  approved: boolean;
   categories: { category: Category }[];
   _count: { votes: number };
 }
@@ -37,6 +38,9 @@ export default function AdminCompaniesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const pendingCompanies = companies.filter((c) => !c.approved);
+  const approvedCompanies = companies.filter((c) => c.approved);
 
   function load() {
     Promise.all([
@@ -119,6 +123,21 @@ export default function AdminCompaniesPage() {
     load();
   }
 
+  async function approve(company: Company) {
+    await fetch(`/api/admin/companies/${company.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved: true }),
+    });
+    load();
+  }
+
+  async function reject(company: Company) {
+    if (!confirm(`Rejeitar e remover "${company.name}"? Isso também apaga o(s) voto(s) associados a ela.`)) return;
+    await fetch(`/api/admin/companies/${company.id}/reject`, { method: 'POST' });
+    load();
+  }
+
   return (
     <div className="space-y-8 max-w-3xl">
       <h1 className="font-display text-2xl font-bold">Empresas</h1>
@@ -197,9 +216,42 @@ export default function AdminCompaniesPage() {
         </div>
       </form>
 
+      {pendingCompanies.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="font-display text-lg font-bold text-gold-300">
+            Sugestões de votantes pendentes de aprovação ({pendingCompanies.length})
+          </h2>
+          <p className="text-ink-400 text-xs -mt-2">
+            Nomes que alguém digitou na votação por não encontrar a empresa na lista. Aprove para que passem a
+            valer nos resultados, ou rejeite para descartar (spam, duplicata, nome ofensivo etc).
+          </p>
+          {pendingCompanies.map((company) => (
+            <div key={company.id} className="bg-gold-500/5 border border-gold-500/30 rounded-xl p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{company.name}</p>
+                  <p className="text-xs text-ink-500 truncate">
+                    {company.categories.map((c) => c.category.name).join(', ') || 'Sem categoria'} ·{' '}
+                    {company._count.votes} voto(s)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => approve(company)} className="text-xs text-green-400 hover:underline">
+                    Aprovar
+                  </button>
+                  <button onClick={() => reject(company)} className="text-xs text-red-400 hover:underline">
+                    Rejeitar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-3">
         {loading && <p className="text-ink-400">Carregando...</p>}
-        {companies.map((company) => (
+        {approvedCompanies.map((company) => (
           <div key={company.id} className="bg-ink-800/60 border border-ink-700 rounded-xl p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
@@ -228,7 +280,7 @@ export default function AdminCompaniesPage() {
             </div>
           </div>
         ))}
-        {!loading && companies.length === 0 && (
+        {!loading && approvedCompanies.length === 0 && (
           <p className="text-ink-500 text-sm">Nenhuma empresa cadastrada ainda.</p>
         )}
       </div>

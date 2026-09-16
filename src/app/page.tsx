@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { prisma } from '@/lib/prisma';
 import { getCategoryImageUrl } from '@/lib/categoryImage';
 
@@ -40,7 +39,10 @@ export default async function HomePage() {
           {settings.heroTitle}
         </h1>
         {settings.city && (
-          <p className="text-gold-300 font-medium tracking-wide mt-3 text-lg">{settings.city}</p>
+          <p className="text-gold-300 font-medium tracking-wide mt-3 text-lg">
+            {settings.city}
+            {settings.state ? ` — ${settings.state}` : ''}
+          </p>
         )}
         <p className="text-ink-300 text-lg sm:text-xl max-w-xl mt-6">{settings.heroSubtitle}</p>
 
@@ -76,7 +78,8 @@ export default async function HomePage() {
                 className="group relative overflow-hidden bg-ink-800/60 border border-ink-700 hover:border-gold-400 rounded-2xl transition-all hover:shadow-premium hover:-translate-y-0.5"
               >
                 <div className="relative w-full h-36">
-                  <Image src={getCategoryImageUrl(c)} alt="" fill className="object-cover" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={getCategoryImageUrl(c)} alt="" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/20 to-transparent" />
                   <span className="absolute top-3 left-3 text-2xl">{c.emoji}</span>
                 </div>
