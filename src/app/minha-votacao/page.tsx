@@ -69,7 +69,9 @@ export default function MinhaVotacaoPage() {
       setCategories(data.categories);
       if (data.participant) {
         setParticipant(data.participant);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.participant));
+        // já existe cadastro -> já aceitou os termos alguma vez antes, não precisa
+        // pedir de novo a cada categoria votada nesta sessão
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data.participant, consentTerms: true }));
         setScreen('checklist');
       } else if (!silent) {
         setScreen('register');
@@ -122,7 +124,7 @@ export default function MinhaVotacaoPage() {
       return;
     }
     setParticipant(data.participant);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data.participant));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data.participant, consentTerms: true }));
     setScreen('checklist');
   }
 

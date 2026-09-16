@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ProgressBar } from './ProgressBar';
 import { maskBrazilPhone } from '@/lib/phone';
+import { getCategoryImageUrl } from '@/lib/categoryImage';
 
 interface Company {
   id: string;
@@ -39,7 +40,16 @@ function getOrCreateSessionId(): string {
   return id;
 }
 
-function getKnownParticipant(): { name: string; phone: string; instagram: string | null } | null {
+interface KnownParticipant {
+  name: string;
+  phone: string;
+  instagram: string | null;
+  email?: string | null;
+  consentTerms?: boolean;
+  consentMarketing?: boolean;
+}
+
+function getKnownParticipant(): KnownParticipant | null {
   if (typeof window === 'undefined') return null;
   try {
     const stored = localStorage.getItem(PARTICIPANT_STORAGE_KEY);
@@ -47,6 +57,10 @@ function getKnownParticipant(): { name: string; phone: string; instagram: string
   } catch {
     return null;
   }
+}
+
+function saveKnownParticipant(data: KnownParticipant) {
+  localStorage.setItem(PARTICIPANT_STORAGE_KEY, JSON.stringify(data));
 }
 
 export function VoteWizard({ categorySlug }: { categorySlug: string }) {
@@ -58,7 +72,8 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [formRenderedAt, setFormRenderedAt] = useState<number>(0);
   const [skipMode, setSkipMode] = useState(false);
-  const [isKnownParticipant, setIsKnownParticipant] = useState(false);
+  const [knownParticipant, setKnownParticipant] = useState<KnownParticipant | null>(null);
+  const isKnownParticipant = !!knownParticipant;
 
   const [form, setForm] = useState(() => {
     const known = getKnownParticipant();
@@ -66,18 +81,18 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
       name: known?.name ?? '',
       phone: known ? maskBrazilPhone(known.phone.replace(/^55/, '')) : '',
       instagram: known?.instagram ?? '',
-      email: '',
+      email: known?.email ?? '',
       city: '',
       neighborhood: '',
       howFoundOut: '',
-      consentTerms: false,
-      consentMarketing: false,
+      consentTerms: known?.consentTerms ?? false,
+      consentMarketing: known?.consentMarketing ?? false,
       website: '', // honeypot
     };
   });
 
   useEffect(() => {
-    setIsKnownParticipant(!!getKnownParticipant());
+    setKnownParticipant(getKnownParticipant());
   }, []);
 
   const utm = useMemo(() => {
@@ -114,18 +129,31 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
     };
   }, [categorySlug]);
 
+  // Já sabemos quem é (login por telefone em /minha-votacao ou voto anterior
+  // nesta mesma sessão) — não faz sentido pedir nome/telefone/termos de novo
+  // a cada categoria, então pulamos direto a etapa de identificação.
+  const canSkipIdentifyStep = isKnownParticipant && !!form.consentTerms;
+
   function chooseCompany(company: Company) {
     setSelectedCompany(company);
     setSkipMode(false);
     setFormRenderedAt(Date.now());
-    setStep('identify');
+    if (canSkipIdentifyStep) {
+      setStep('confirm');
+    } else {
+      setStep('identify');
+    }
   }
 
   function skipCategory() {
     setSelectedCompany(null);
     setSkipMode(true);
     setFormRenderedAt(Date.now());
-    setStep('identify');
+    if (canSkipIdentifyStep) {
+      submitVote(true);
+    } else {
+      setStep('identify');
+    }
   }
 
   function handleIdentifySubmit(e: React.FormEvent) {
@@ -188,11 +216,16 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
       }
 
       const phoneDigits = form.phone.replace(/\D/g, '');
-      localStorage.setItem(
-        PARTICIPANT_STORAGE_KEY,
-        JSON.stringify({ name: form.name.trim(), phone: `55${phoneDigits}`, instagram: form.instagram || null }),
-      );
-      setIsKnownParticipant(true);
+      const updatedParticipant: KnownParticipant = {
+        name: form.name.trim(),
+        phone: `55${phoneDigits}`,
+        instagram: form.instagram || null,
+        email: form.email || null,
+        consentTerms: true,
+        consentMarketing: form.consentMarketing,
+      };
+      saveKnownParticipant(updatedParticipant);
+      setKnownParticipant(updatedParticipant);
 
       setStep('success');
     } catch {
@@ -230,11 +263,12 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
       {step === 'choose-company' && category && (
         <div className="animate-fade-in-up">
-          {category.imageUrl && (
-            <div className="relative w-full h-40 sm:h-52 rounded-2xl overflow-hidden mb-6">
-              <Image src={category.imageUrl} alt="" fill className="object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/10 to-transparent" />
-            </div>
+          <div className="relative w-full h-40 sm:h-52 rounded-2xl overflow-hidden mb-6">
+            <Image src={getCategoryImageUrl(category)} alt="" fill className="object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/10 to-transparent" />
+          </div>
+          {errorMessage && (
+            <p className="text-red-400 text-sm text-center mb-4">{errorMessage}</p>
           )}
           <p className="text-gold-400 text-sm tracking-[0.2em] uppercase text-center mb-2">
             {category.emoji} {category.name}
@@ -289,9 +323,10 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
             <button
               type="button"
               onClick={skipCategory}
-              className="text-ink-500 hover:text-ink-300 text-sm underline underline-offset-4"
+              disabled={submitting}
+              className="text-ink-500 hover:text-ink-300 text-sm underline underline-offset-4 disabled:opacity-60"
             >
-              Pular esta categoria
+              {submitting ? 'Pulando...' : 'Pular esta categoria'}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { prisma } from '@/lib/prisma';
+import { getCategoryImageUrl } from '@/lib/categoryImage';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,16 +75,13 @@ export default async function HomePage() {
                 href={`/votar/${c.slug}`}
                 className="group relative overflow-hidden bg-ink-800/60 border border-ink-700 hover:border-gold-400 rounded-2xl transition-all hover:shadow-premium hover:-translate-y-0.5"
               >
-                {c.imageUrl ? (
-                  <div className="relative w-full h-36">
-                    <Image src={c.imageUrl} alt="" fill className="object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/20 to-transparent" />
-                    <span className="absolute top-3 left-3 text-2xl">{c.emoji}</span>
-                  </div>
-                ) : null}
+                <div className="relative w-full h-36">
+                  <Image src={getCategoryImageUrl(c)} alt="" fill className="object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/20 to-transparent" />
+                  <span className="absolute top-3 left-3 text-2xl">{c.emoji}</span>
+                </div>
                 <div className="p-6">
-                  {!c.imageUrl && <span className="text-3xl">{c.emoji}</span>}
-                  <p className="font-display font-bold text-xl mt-3 group-hover:text-gold-300 transition-colors">
+                  <p className="font-display font-bold text-xl group-hover:text-gold-300 transition-colors">
                     {c.name}
                   </p>
                   {c.description && <p className="text-ink-400 text-sm mt-1">{c.description}</p>}

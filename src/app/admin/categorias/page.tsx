@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getCategoryImageUrl } from '@/lib/categoryImage';
 
 interface Category {
   id: string;
@@ -394,12 +395,12 @@ export default function AdminCategoriesPage() {
           <div key={cat.id} className="bg-ink-800/60 border border-ink-700 rounded-xl p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
-                {cat.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cat.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                ) : (
-                  <span className="text-2xl">{cat.emoji}</span>
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={getCategoryImageUrl(cat)}
+                  alt=""
+                  className="w-10 h-10 rounded-lg object-cover shrink-0"
+                />
                 <div className="min-w-0">
                   <p className="font-medium truncate">{cat.name}</p>
                   <p className="text-xs text-ink-500">
