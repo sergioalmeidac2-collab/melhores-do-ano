@@ -22,6 +22,7 @@ export async function GET(_req: Request, { params }: { params: { slug: string } 
       name: category.name,
       slug: category.slug,
       description: category.description,
+      imageUrl: category.imageUrl,
       emoji: category.emoji,
     },
     companies: links.map((l) => ({

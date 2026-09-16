@@ -5,11 +5,11 @@ import { formatNormalizedPhone } from '@/lib/phone';
 
 interface Vote {
   id: string;
-  status: 'VALID' | 'SUSPICIOUS' | 'INVALID';
+  status: 'VALID' | 'SUSPICIOUS' | 'INVALID' | 'SKIPPED';
   createdAt: string;
   utmSource: string | null;
   category: { name: string };
-  company: { name: string };
+  company: { name: string } | null;
   participant: { name: string; phone: string; city: string | null; neighborhood: string | null };
   voteSource: { label: string } | null;
 }
@@ -112,6 +112,7 @@ export default function AdminVotesPage() {
         >
           <option value="">Todos status</option>
           <option value="VALID">Válido</option>
+          <option value="SKIPPED">Pulado</option>
           <option value="SUSPICIOUS">Suspeito</option>
           <option value="INVALID">Invalidado</option>
         </select>
@@ -163,7 +164,7 @@ export default function AdminVotesPage() {
                   {new Date(v.createdAt).toLocaleString('pt-BR')}
                 </td>
                 <td className="py-2 px-3">{v.category.name}</td>
-                <td className="py-2 px-3">{v.company.name}</td>
+                <td className="py-2 px-3">{v.company?.name ?? '—'}</td>
                 <td className="py-2 px-3">{v.participant.name}</td>
                 <td className="py-2 px-3 text-ink-400">{formatNormalizedPhone(v.participant.phone)}</td>
                 <td className="py-2 px-3 text-ink-400">{v.voteSource?.label ?? v.utmSource ?? 'Direto'}</td>
@@ -199,9 +200,10 @@ export default function AdminVotesPage() {
 function StatusBadge({ status }: { status: Vote['status'] }) {
   const map = {
     VALID: 'border-green-500/40 text-green-400',
+    SKIPPED: 'border-ink-600 text-ink-400',
     SUSPICIOUS: 'border-amber-500/40 text-amber-400',
     INVALID: 'border-red-500/40 text-red-400',
   } as const;
-  const label = { VALID: 'Válido', SUSPICIOUS: 'Suspeito', INVALID: 'Invalidado' } as const;
+  const label = { VALID: 'Válido', SKIPPED: 'Pulado', SUSPICIOUS: 'Suspeito', INVALID: 'Invalidado' } as const;
   return <span className={`text-xs px-2 py-0.5 rounded-full border ${map[status]}`}>{label[status]}</span>;
 }

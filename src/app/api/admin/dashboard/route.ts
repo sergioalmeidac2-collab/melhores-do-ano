@@ -36,16 +36,18 @@ export async function GET() {
     }),
   ]);
 
-  const companyIds = Array.from(new Set(companies.map((c) => c.companyId)));
+  const companyIds = Array.from(
+    new Set(companies.map((c) => c.companyId).filter((id): id is string => id !== null)),
+  );
   const companyRecords = await prisma.company.findMany({ where: { id: { in: companyIds } } });
   const companyMap = new Map(companyRecords.map((c) => [c.id, c.name]));
 
   const categoryStats = categories.map((cat) => {
     const companiesInCategory = companies
-      .filter((c) => c.categoryId === cat.id)
+      .filter((c) => c.categoryId === cat.id && c.companyId !== null)
       .map((c) => ({
-        companyId: c.companyId,
-        companyName: companyMap.get(c.companyId) ?? 'Empresa',
+        companyId: c.companyId as string,
+        companyName: companyMap.get(c.companyId as string) ?? 'Empresa',
         votes: c._count._all,
       }))
       .sort((a, b) => b.votes - a.votes);
@@ -65,12 +67,14 @@ export async function GET() {
 
   const suspiciousCount = await prisma.vote.count({ where: { status: 'SUSPICIOUS' } });
   const invalidCount = await prisma.vote.count({ where: { status: 'INVALID' } });
+  const skippedCount = await prisma.vote.count({ where: { status: 'SKIPPED' } });
 
   return NextResponse.json({
     totalVotes,
     totalParticipants,
     suspiciousCount,
     invalidCount,
+    skippedCount,
     categoryStats,
     votesByDay: byDay.map((d) => ({ day: d.day, count: Number(d.count) })),
     votesByHour: byHour.map((d) => ({ hour: d.hour, count: Number(d.count) })),

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -49,9 +50,14 @@ export default async function HomePage() {
           VOTAR AGORA
         </Link>
 
-        <a href="#categorias" className="text-ink-400 text-sm mt-16 underline underline-offset-4">
-          Ver categorias
-        </a>
+        <div className="flex flex-col items-center gap-3 mt-16">
+          <a href="#categorias" className="text-ink-400 text-sm underline underline-offset-4">
+            Ver categorias
+          </a>
+          <Link href="/minha-votacao" className="text-ink-500 text-sm underline underline-offset-4">
+            Já comecei a votar — ver meu progresso
+          </Link>
+        </div>
       </section>
 
       <section id="categorias" className="max-w-5xl mx-auto px-4 py-20">
@@ -66,13 +72,22 @@ export default async function HomePage() {
               <Link
                 key={c.id}
                 href={`/votar/${c.slug}`}
-                className="group bg-ink-800/60 border border-ink-700 hover:border-gold-400 rounded-2xl p-6 transition-all hover:shadow-premium hover:-translate-y-0.5"
+                className="group relative overflow-hidden bg-ink-800/60 border border-ink-700 hover:border-gold-400 rounded-2xl transition-all hover:shadow-premium hover:-translate-y-0.5"
               >
-                <span className="text-3xl">{c.emoji}</span>
-                <p className="font-display font-bold text-xl mt-3 group-hover:text-gold-300 transition-colors">
-                  {c.name}
-                </p>
-                {c.description && <p className="text-ink-400 text-sm mt-1">{c.description}</p>}
+                {c.imageUrl ? (
+                  <div className="relative w-full h-36">
+                    <Image src={c.imageUrl} alt="" fill className="object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/20 to-transparent" />
+                    <span className="absolute top-3 left-3 text-2xl">{c.emoji}</span>
+                  </div>
+                ) : null}
+                <div className="p-6">
+                  {!c.imageUrl && <span className="text-3xl">{c.emoji}</span>}
+                  <p className="font-display font-bold text-xl mt-3 group-hover:text-gold-300 transition-colors">
+                    {c.name}
+                  </p>
+                  {c.description && <p className="text-ink-400 text-sm mt-1">{c.description}</p>}
+                </div>
               </Link>
             ))}
           </div>

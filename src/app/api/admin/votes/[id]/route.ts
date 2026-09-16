@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/requireAdmin';
 
 const patchSchema = z.object({
-  status: z.enum(['VALID', 'SUSPICIOUS', 'INVALID']).optional(),
+  status: z.enum(['VALID', 'SUSPICIOUS', 'INVALID', 'SKIPPED']).optional(),
   reviewNote: z.string().max(500).optional().nullable(),
   blockPhone: z.boolean().optional(),
   blockSession: z.boolean().optional(),

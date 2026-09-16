@@ -18,9 +18,29 @@ export async function GET() {
 const createSchema = z.object({
   name: z.string().trim().min(2).max(120),
   description: z.string().max(300).optional().nullable(),
+  imageUrl: z.string().url().optional().nullable().or(z.literal('')),
   emoji: z.string().max(8).optional(),
   active: z.boolean().optional().default(true),
+  // opções (empresas) já cadastradas junto com a categoria, ex: "Padaria" ->
+  // ["Pão Nosso", "Nossa Padaria", "Santo Pão"]. Cada nome vira uma Company
+  // já vinculada a esta categoria, na mesma ordem informada.
+  options: z.array(z.string().trim().min(1).max(160)).max(200).optional().default([]),
 });
+
+async function uniqueSlug(model: 'category' | 'company', name: string): Promise<string> {
+  const base = slugify(name);
+  let slug = base;
+  let n = 1;
+  while (
+    model === 'category'
+      ? await prisma.category.findUnique({ where: { slug } })
+      : await prisma.company.findUnique({ where: { slug } })
+  ) {
+    n += 1;
+    slug = `${base}-${n}`;
+  }
+  return slug;
+}
 
 export async function POST(req: Request) {
   const { error } = await requireAdmin();
@@ -32,14 +52,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }, { status: 400 });
   }
 
-  const base = slugify(parsed.data.name);
-  let slug = base;
-  let n = 1;
-  while (await prisma.category.findUnique({ where: { slug } })) {
-    n += 1;
-    slug = `${base}-${n}`;
-  }
-
+  const slug = await uniqueSlug('category', parsed.data.name);
   const maxOrder = await prisma.category.aggregate({ _max: { order: true } });
 
   const category = await prisma.category.create({
@@ -47,11 +60,31 @@ export async function POST(req: Request) {
       name: parsed.data.name,
       slug,
       description: parsed.data.description || null,
+      imageUrl: parsed.data.imageUrl || null,
       emoji: parsed.data.emoji || '🏆',
       active: parsed.data.active,
       order: (maxOrder._max.order ?? 0) + 1,
     },
   });
 
-  return NextResponse.json({ category });
+  const optionNames = Array.from(new Set(parsed.data.options.map((o) => o.trim()).filter(Boolean)));
+
+  for (let i = 0; i < optionNames.length; i++) {
+    const name = optionNames[i];
+    const companySlug = await uniqueSlug('company', name);
+    await prisma.company.create({
+      data: {
+        name,
+        slug: companySlug,
+        categories: { create: { categoryId: category.id, order: i } },
+      },
+    });
+  }
+
+  const withCompanies = await prisma.category.findUnique({
+    where: { id: category.id },
+    include: { _count: { select: { companies: true, votes: true } } },
+  });
+
+  return NextResponse.json({ category: withCompanies });
 }

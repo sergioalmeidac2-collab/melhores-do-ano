@@ -32,7 +32,7 @@ datasource db {
 // votingStatus e status abaixo são String (não enum do Prisma) com os valores
 // restritos por validação Zod na camada de API:
 //   votingStatus: "NOT_STARTED" | "OPEN" | "CLOSED"
-//   status (Vote): "VALID" | "SUSPICIOUS" | "INVALID"
+//   status (Vote): "VALID" | "SUSPICIOUS" | "INVALID" | "SKIPPED"
 // Poderiam virar enum nativo do Postgres numa iteração futura; mantidos como
 // String por ora para não introduzir uma migração de tipo sem banco real para testar.
 
@@ -69,6 +69,7 @@ model Category {
   name        String
   slug        String   @unique
   description String?
+  imageUrl    String?
   emoji       String   @default("🏆")
   order       Int      @default(0)
   active      Boolean  @default(true)
@@ -146,7 +147,7 @@ model VoteSource {
 model Vote {
   id             String                @id @default(cuid())
   categoryId     String
-  companyId      String
+  companyId      String? // null quando o participante pulou a categoria (status SKIPPED)
   participantId  String
   voteSourceId   String?
 
@@ -169,11 +170,11 @@ model Vote {
   createdAt      DateTime @default(now())
 
   category    Category    @relation(fields: [categoryId], references: [id])
-  company     Company     @relation(fields: [companyId], references: [id])
+  company     Company?    @relation(fields: [companyId], references: [id])
   participant Participant @relation(fields: [participantId], references: [id])
   voteSource  VoteSource? @relation(fields: [voteSourceId], references: [id])
 
-  // Regra antifraude principal: 1 voto por telefone por categoria
+  // Regra antifraude principal: 1 voto (ou 1 pulo) por telefone por categoria
   @@unique([participantId, categoryId])
   @@index([categoryId, companyId])
   @@index([createdAt])

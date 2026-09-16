@@ -20,10 +20,13 @@ interface CategoryData {
   name: string;
   slug: string;
   description: string | null;
+  imageUrl: string | null;
   emoji: string;
 }
 
 type Step = 'loading' | 'choose-company' | 'identify' | 'confirm' | 'success' | 'error';
+
+const PARTICIPANT_STORAGE_KEY = 'mda_participant';
 
 function getOrCreateSessionId(): string {
   if (typeof window === 'undefined') return '';
@@ -36,6 +39,16 @@ function getOrCreateSessionId(): string {
   return id;
 }
 
+function getKnownParticipant(): { name: string; phone: string; instagram: string | null } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(PARTICIPANT_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function VoteWizard({ categorySlug }: { categorySlug: string }) {
   const [step, setStep] = useState<Step>('loading');
   const [category, setCategory] = useState<CategoryData | null>(null);
@@ -44,19 +57,28 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formRenderedAt, setFormRenderedAt] = useState<number>(0);
+  const [skipMode, setSkipMode] = useState(false);
+  const [isKnownParticipant, setIsKnownParticipant] = useState(false);
 
-  const [form, setForm] = useState({
-    name: '',
-    phone: '',
-    instagram: '',
-    email: '',
-    city: '',
-    neighborhood: '',
-    howFoundOut: '',
-    consentTerms: false,
-    consentMarketing: false,
-    website: '', // honeypot
+  const [form, setForm] = useState(() => {
+    const known = getKnownParticipant();
+    return {
+      name: known?.name ?? '',
+      phone: known ? maskBrazilPhone(known.phone.replace(/^55/, '')) : '',
+      instagram: known?.instagram ?? '',
+      email: '',
+      city: '',
+      neighborhood: '',
+      howFoundOut: '',
+      consentTerms: false,
+      consentMarketing: false,
+      website: '', // honeypot
+    };
   });
+
+  useEffect(() => {
+    setIsKnownParticipant(!!getKnownParticipant());
+  }, []);
 
   const utm = useMemo(() => {
     if (typeof window === 'undefined') return {};
@@ -94,6 +116,14 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
   function chooseCompany(company: Company) {
     setSelectedCompany(company);
+    setSkipMode(false);
+    setFormRenderedAt(Date.now());
+    setStep('identify');
+  }
+
+  function skipCategory() {
+    setSelectedCompany(null);
+    setSkipMode(true);
     setFormRenderedAt(Date.now());
     setStep('identify');
   }
@@ -113,11 +143,16 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
       return;
     }
     setErrorMessage(null);
-    setStep('confirm');
+    if (skipMode) {
+      submitVote(true);
+    } else {
+      setStep('confirm');
+    }
   }
 
-  async function confirmVote() {
-    if (!category || !selectedCompany) return;
+  async function submitVote(skip: boolean) {
+    if (!category) return;
+    if (!skip && !selectedCompany) return;
     setSubmitting(true);
     setErrorMessage(null);
 
@@ -127,7 +162,8 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           categorySlug: category.slug,
-          companySlug: selectedCompany.slug,
+          companySlug: selectedCompany?.slug,
+          skip,
           name: form.name.trim(),
           phone: form.phone,
           instagram: form.instagram || null,
@@ -146,10 +182,18 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
       const data = await res.json();
       if (!res.ok) {
-        setErrorMessage(data.error ?? 'Não foi possível registrar seu voto.');
+        setErrorMessage(data.error ?? 'Não foi possível registrar.');
         setSubmitting(false);
         return;
       }
+
+      const phoneDigits = form.phone.replace(/\D/g, '');
+      localStorage.setItem(
+        PARTICIPANT_STORAGE_KEY,
+        JSON.stringify({ name: form.name.trim(), phone: `55${phoneDigits}`, instagram: form.instagram || null }),
+      );
+      setIsKnownParticipant(true);
+
       setStep('success');
     } catch {
       setErrorMessage('Falha de conexão. Tente novamente.');
@@ -186,6 +230,12 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
       {step === 'choose-company' && category && (
         <div className="animate-fade-in-up">
+          {category.imageUrl && (
+            <div className="relative w-full h-40 sm:h-52 rounded-2xl overflow-hidden mb-6">
+              <Image src={category.imageUrl} alt="" fill className="object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/10 to-transparent" />
+            </div>
+          )}
           <p className="text-gold-400 text-sm tracking-[0.2em] uppercase text-center mb-2">
             {category.emoji} {category.name}
           </p>
@@ -234,14 +284,31 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
           {companies.length === 0 && (
             <p className="text-center text-ink-400">Nenhuma empresa cadastrada nesta categoria ainda.</p>
           )}
+
+          <div className="text-center mt-8">
+            <button
+              type="button"
+              onClick={skipCategory}
+              className="text-ink-500 hover:text-ink-300 text-sm underline underline-offset-4"
+            >
+              Pular esta categoria
+            </button>
+          </div>
         </div>
       )}
 
-      {step === 'identify' && category && selectedCompany && (
+      {step === 'identify' && category && (skipMode || selectedCompany) && (
         <form onSubmit={handleIdentifySubmit} className="animate-fade-in-up space-y-5">
           <h1 className="font-display text-3xl font-bold text-center mb-1">Identifique-se</h1>
           <p className="text-ink-300 text-center mb-8">
-            Seu voto em <span className="text-gold-300 font-medium">{selectedCompany.name}</span> quase concluído.
+            {skipMode ? (
+              <>Confirme seus dados para pular esta categoria.</>
+            ) : (
+              <>
+                Seu voto em <span className="text-gold-300 font-medium">{selectedCompany?.name}</span> quase
+                concluído.
+              </>
+            )}
           </p>
 
           {/* honeypot - invisível para humanos */}
@@ -364,7 +431,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
               Voltar
             </button>
             <button type="submit" className="btn-primary flex-1">
-              Continuar
+              {skipMode ? 'Pular categoria' : 'Continuar'}
             </button>
           </div>
         </form>
@@ -392,7 +459,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
             <button
               type="button"
               disabled={submitting}
-              onClick={confirmVote}
+              onClick={() => submitVote(false)}
               className="btn-primary flex-1 disabled:opacity-60"
             >
               {submitting ? 'Enviando...' : 'CONFIRMAR MEU VOTO'}
@@ -401,20 +468,38 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
         </div>
       )}
 
-      {step === 'success' && category && selectedCompany && (
+      {step === 'success' && category && (skipMode || selectedCompany) && (
         <div className="animate-fade-in-up flex flex-col items-center text-center gap-5 py-10">
           <div className="w-20 h-20 rounded-full bg-gold-500/10 border-2 border-gold-400 flex items-center justify-center text-4xl pulse-ring">
-            🏆
+            {skipMode ? '⏭️' : '🏆'}
           </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-bold">Voto registrado com sucesso!</h1>
+          <h1 className="font-display text-3xl sm:text-4xl font-bold">
+            {skipMode ? 'Categoria pulada!' : 'Voto registrado com sucesso!'}
+          </h1>
           <p className="text-ink-300 max-w-md">
-            Obrigado por participar do Melhores do Ano. Seu voto em{' '}
-            <span className="text-gold-300 font-medium">{selectedCompany.name}</span> na categoria{' '}
-            <span className="text-gold-300 font-medium">{category.name}</span> foi confirmado.
+            {skipMode ? (
+              <>
+                Tudo bem, você pode votar nessa categoria depois. Categoria{' '}
+                <span className="text-gold-300 font-medium">{category.name}</span> marcada como pulada.
+              </>
+            ) : (
+              <>
+                Obrigado por participar do Melhores do Ano. Seu voto em{' '}
+                <span className="text-gold-300 font-medium">{selectedCompany?.name}</span> na categoria{' '}
+                <span className="text-gold-300 font-medium">{category.name}</span> foi confirmado.
+              </>
+            )}
           </p>
-          <Link href="/votar" className="btn-primary mt-4">
-            Votar em outra categoria
-          </Link>
+          <div className="flex gap-3 mt-4">
+            {isKnownParticipant && (
+              <Link href="/minha-votacao" className="btn-secondary">
+                Ver minha lista
+              </Link>
+            )}
+            <Link href="/votar" className="btn-primary">
+              Votar em outra categoria
+            </Link>
+          </div>
         </div>
       )}
     </div>

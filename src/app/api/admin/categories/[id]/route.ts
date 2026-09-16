@@ -6,6 +6,7 @@ import { requireAdmin } from '@/lib/requireAdmin';
 const updateSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   description: z.string().max(300).optional().nullable(),
+  imageUrl: z.string().url().optional().nullable().or(z.literal('')),
   emoji: z.string().max(8).optional(),
   active: z.boolean().optional(),
   order: z.number().int().optional(),
@@ -21,9 +22,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }, { status: 400 });
   }
 
+  const { imageUrl, ...rest } = parsed.data;
+
   const category = await prisma.category.update({
     where: { id: params.id },
-    data: parsed.data,
+    data: { ...rest, imageUrl: imageUrl === '' ? null : imageUrl },
   });
 
   return NextResponse.json({ category });

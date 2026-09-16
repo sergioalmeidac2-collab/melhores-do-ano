@@ -7,6 +7,7 @@ interface Category {
   name: string;
   slug: string;
   description: string | null;
+  imageUrl: string | null;
   emoji: string;
   active: boolean;
   order: number;
@@ -94,7 +95,9 @@ const CATEGORY_SUGGESTIONS = [
 export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: '', description: '', emoji: '🏆' });
+  const [form, setForm] = useState({ name: '', description: '', imageUrl: '', emoji: '🏆' });
+  const [options, setOptions] = useState<string[]>(['']);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -114,14 +117,20 @@ export default function AdminCategoriesPage() {
 
   useEffect(load, []);
 
-  async function createCategory(e: React.FormEvent) {
+  async function submitCategory(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const res = await fetch('/api/admin/categories', {
-      method: 'POST',
+
+    const url = editingId ? `/api/admin/categories/${editingId}` : '/api/admin/categories';
+    const method = editingId ? 'PUT' : 'POST';
+    const cleanOptions = options.map((o) => o.trim()).filter(Boolean);
+    const body = editingId ? form : { ...form, options: cleanOptions };
+
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     setSaving(false);
@@ -129,8 +138,42 @@ export default function AdminCategoriesPage() {
       setError(data.error);
       return;
     }
-    setForm({ name: '', description: '', emoji: '🏆' });
+    cancelEdit();
     load();
+  }
+
+  function startEdit(cat: Category) {
+    setEditingId(cat.id);
+    setForm({
+      name: cat.name,
+      description: cat.description ?? '',
+      imageUrl: cat.imageUrl ?? '',
+      emoji: cat.emoji,
+    });
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm({ name: '', description: '', imageUrl: '', emoji: '🏆' });
+    setOptions(['']);
+  }
+
+  function updateOption(index: number, value: string) {
+    setOptions((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      // sempre mantém um campo em branco no final para adicionar mais uma opção
+      if (index === next.length - 1 && value.trim() !== '') next.push('');
+      return next;
+    });
+  }
+
+  function removeOption(index: number) {
+    setOptions((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length === 0 ? [''] : next;
+    });
   }
 
   async function toggleActive(cat: Category) {
@@ -176,8 +219,8 @@ export default function AdminCategoriesPage() {
     <div className="space-y-8 max-w-3xl">
       <h1 className="font-display text-2xl font-bold">Categorias</h1>
 
-      <form onSubmit={createCategory} className="bg-ink-800/60 border border-ink-700 rounded-2xl p-5 space-y-4">
-        <h2 className="font-semibold">Nova categoria</h2>
+      <form onSubmit={submitCategory} className="bg-ink-800/60 border border-ink-700 rounded-2xl p-5 space-y-4">
+        <h2 className="font-semibold">{editingId ? 'Editar categoria' : 'Nova categoria'}</h2>
         <div className="flex gap-3">
           <input
             className="input w-20 text-center text-xl"
@@ -199,10 +242,63 @@ export default function AdminCategoriesPage() {
           value={form.description}
           onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
         />
+        <input
+          className="input"
+          placeholder="URL da imagem da categoria (opcional)"
+          value={form.imageUrl}
+          onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+        />
+
+        {!editingId && (
+          <div>
+            <p className="text-sm text-ink-300 mb-2">
+              Opções desta categoria (as empresas concorrentes — pode adicionar depois também)
+            </p>
+            <div className="space-y-2">
+              {options.map((opt, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    className="input"
+                    placeholder={i === options.length - 1 ? 'Adicionar outra opção...' : `Opção ${i + 1}`}
+                    value={opt}
+                    onChange={(e) => updateOption(i, e.target.value)}
+                  />
+                  {options.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeOption(i)}
+                      className="text-ink-500 hover:text-red-400 px-2"
+                      aria-label="Remover opção"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {editingId && (
+          <p className="text-ink-500 text-xs">
+            Para adicionar/editar as opções (empresas) desta categoria, use a página{' '}
+            <a href="/admin/empresas" className="text-gold-400 underline">
+              Empresas
+            </a>
+            .
+          </p>
+        )}
+
         {error && <p className="text-red-400 text-sm">{error}</p>}
-        <button type="submit" disabled={saving} className="btn-primary disabled:opacity-60">
-          {saving ? 'Salvando...' : 'Adicionar categoria'}
-        </button>
+        <div className="flex gap-3">
+          {editingId && (
+            <button type="button" onClick={cancelEdit} className="btn-secondary">
+              Cancelar
+            </button>
+          )}
+          <button type="submit" disabled={saving} className="btn-primary disabled:opacity-60">
+            {saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Adicionar categoria'}
+          </button>
+        </div>
       </form>
 
       <div className="bg-ink-800/60 border border-ink-700 rounded-2xl p-5 space-y-4">
@@ -247,7 +343,12 @@ export default function AdminCategoriesPage() {
             className="bg-ink-800/60 border border-ink-700 rounded-xl p-4 flex items-center justify-between gap-4"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="text-2xl">{cat.emoji}</span>
+              {cat.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={cat.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+              ) : (
+                <span className="text-2xl">{cat.emoji}</span>
+              )}
               <div className="min-w-0">
                 <p className="font-medium truncate">{cat.name}</p>
                 <p className="text-xs text-ink-500">
@@ -265,6 +366,9 @@ export default function AdminCategoriesPage() {
                 }`}
               >
                 {cat.active ? 'Ativa' : 'Inativa'}
+              </button>
+              <button onClick={() => startEdit(cat)} className="text-xs text-gold-400 hover:underline">
+                Editar
               </button>
               <button onClick={() => remove(cat)} className="text-xs text-red-400 hover:underline">
                 Excluir

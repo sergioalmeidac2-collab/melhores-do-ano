@@ -7,6 +7,7 @@ interface DashboardData {
   totalParticipants: number;
   suspiciousCount: number;
   invalidCount: number;
+  skippedCount: number;
   categoryStats: {
     categoryId: string;
     categoryName: string;
@@ -36,9 +37,10 @@ export default function AdminDashboardPage() {
     <div className="space-y-8">
       <h1 className="font-display text-2xl font-bold">Dashboard</h1>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Total de votos" value={data.totalVotes} />
         <StatCard label="Participantes" value={data.totalParticipants} />
+        <StatCard label="Pulados" value={data.skippedCount} accent="text-ink-400" />
         <StatCard label="Suspeitos" value={data.suspiciousCount} accent="text-amber-400" />
         <StatCard label="Invalidados" value={data.invalidCount} accent="text-red-400" />
       </div>

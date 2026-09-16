@@ -50,7 +50,7 @@ export async function GET(req: Request) {
       created.toISOString().slice(0, 10),
       created.toISOString().slice(11, 19),
       v.category.name,
-      v.company.name,
+      v.company?.name ?? '(pulou)',
       v.participant.name,
       formatNormalizedPhone(v.participant.phone),
       v.participant.instagram ?? '',

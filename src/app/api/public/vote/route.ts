@@ -7,7 +7,8 @@ import { checkRateLimit, getClientIp, hashIp, isPhoneBlocked, isSessionBlocked }
 
 const voteSchema = z.object({
   categorySlug: z.string().min(1),
-  companySlug: z.string().min(1),
+  companySlug: z.string().min(1).optional(),
+  skip: z.boolean().optional().default(false),
   name: z.string().trim().min(3, 'Informe seu nome completo.').max(120),
   phone: z.string().min(10),
   instagram: z.string().max(60).optional().nullable(),
@@ -98,16 +99,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
   }
 
-  const company = await prisma.company.findUnique({ where: { slug: data.companySlug } });
-  if (!company || !company.active) {
-    return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 });
-  }
+  let company: Awaited<ReturnType<typeof prisma.company.findUnique>> = null;
+  if (!data.skip) {
+    if (!data.companySlug) {
+      return NextResponse.json({ error: 'Escolha uma empresa ou pule a categoria.' }, { status: 400 });
+    }
+    company = await prisma.company.findUnique({ where: { slug: data.companySlug } });
+    if (!company || !company.active) {
+      return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 });
+    }
 
-  const link = await prisma.categoryCompany.findUnique({
-    where: { categoryId_companyId: { categoryId: category.id, companyId: company.id } },
-  });
-  if (!link) {
-    return NextResponse.json({ error: 'Essa empresa não participa dessa categoria.' }, { status: 400 });
+    const link = await prisma.categoryCompany.findUnique({
+      where: { categoryId_companyId: { categoryId: category.id, companyId: company.id } },
+    });
+    if (!link) {
+      return NextResponse.json({ error: 'Essa empresa não participa dessa categoria.' }, { status: 400 });
+    }
   }
 
   const instagram = normalizeInstagram(data.instagram);
@@ -146,16 +153,17 @@ export async function POST(req: Request) {
   });
 
   if (existingVote) {
-    return NextResponse.json(
-      { error: 'Você já votou nesta categoria. Cada participante pode votar uma vez por categoria.' },
-      { status: 409 },
-    );
+    const message =
+      existingVote.status === 'SKIPPED'
+        ? 'Você já pulou esta categoria.'
+        : 'Você já votou nesta categoria. Cada participante pode votar uma vez por categoria.';
+    return NextResponse.json({ error: message }, { status: 409 });
   }
 
   const vote = await prisma.vote.create({
     data: {
       categoryId: category.id,
-      companyId: company.id,
+      companyId: company?.id ?? null,
       participantId: participant.id,
       voteSourceId,
       utmSource: data.utmSource || null,
@@ -166,11 +174,11 @@ export async function POST(req: Request) {
       ipHash,
       userAgent: req.headers.get('user-agent') ?? null,
       sessionId: data.sessionId,
-      status: tooFast ? 'SUSPICIOUS' : 'VALID',
+      status: data.skip ? 'SKIPPED' : tooFast ? 'SUSPICIOUS' : 'VALID',
       consentTerms: data.consentTerms,
       consentMarketing: data.consentMarketing,
     },
   });
 
-  return NextResponse.json({ success: true, voteId: vote.id });
+  return NextResponse.json({ success: true, voteId: vote.id, skipped: data.skip });
 }
