@@ -44,17 +44,37 @@ export async function GET(req: Request) {
     .filter((c) => voteByCategory.get(c.id) && voteByCategory.get(c.id) !== 'SKIPPED')
     .map((c) => c.id);
 
-  // Só contamos votos totais das categorias em que a pessoa já votou de
+  // Só mostramos o ranking das categorias em que a pessoa já votou de
   // verdade — quem ainda não votou (ou só pulou) não vê nenhum número, pra
   // não influenciar a decisão de voto de ninguém.
   const voteCounts = votedCategoryIds.length
     ? await prisma.vote.groupBy({
-        by: ['categoryId'],
-        where: { categoryId: { in: votedCategoryIds }, status: 'VALID' },
+        by: ['categoryId', 'companyId'],
+        where: { categoryId: { in: votedCategoryIds }, status: 'VALID', companyId: { not: null } },
         _count: { _all: true },
       })
     : [];
-  const countByCategory = new Map(voteCounts.map((v) => [v.categoryId, v._count._all]));
+
+  const companyIds = Array.from(new Set(voteCounts.map((v) => v.companyId).filter((id): id is string => !!id)));
+  const companies = companyIds.length
+    ? await prisma.company.findMany({ where: { id: { in: companyIds } }, select: { id: true, name: true } })
+    : [];
+  const companyNameById = new Map(companies.map((c) => [c.id, c.name]));
+
+  const rankingByCategory = new Map<string, { companyId: string; companyName: string; votes: number; percentage: number }[]>();
+  for (const categoryId of votedCategoryIds) {
+    const rows = voteCounts.filter((v) => v.categoryId === categoryId);
+    const total = rows.reduce((sum, r) => sum + r._count._all, 0);
+    const ranking = rows
+      .map((r) => ({
+        companyId: r.companyId as string,
+        companyName: companyNameById.get(r.companyId as string) ?? 'Empresa',
+        votes: r._count._all,
+        percentage: total > 0 ? Math.round((r._count._all / total) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.votes - a.votes);
+    rankingByCategory.set(categoryId, ranking);
+  }
 
   const progress = categories
     .filter((c) => c._count.companies > 0)
@@ -68,7 +88,7 @@ export async function GET(req: Request) {
         emoji: c.emoji,
         imageUrl: c.imageUrl,
         status: status === 'SKIPPED' ? 'SKIPPED' : status ? 'VOTED' : 'PENDING',
-        totalVotes: votedForReal ? (countByCategory.get(c.id) ?? 0) : null,
+        ranking: votedForReal ? (rankingByCategory.get(c.id) ?? []) : null,
       };
     });
 

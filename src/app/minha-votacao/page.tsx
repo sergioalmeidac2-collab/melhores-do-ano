@@ -4,6 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { maskBrazilPhone } from '@/lib/phone';
 
+interface RankingEntry {
+  companyId: string;
+  companyName: string;
+  votes: number;
+  percentage: number;
+}
+
 interface CategoryProgress {
   id: string;
   slug: string;
@@ -11,7 +18,7 @@ interface CategoryProgress {
   emoji: string;
   imageUrl: string | null;
   status: 'VOTED' | 'SKIPPED' | 'PENDING';
-  totalVotes: number | null;
+  ranking: RankingEntry[] | null;
 }
 
 interface Participant {
@@ -142,7 +149,8 @@ export default function MinhaVotacaoPage() {
     <div className="max-w-2xl mx-auto px-4 py-12 sm:py-16 uppercase">
       <h1 className="font-display text-3xl font-bold text-center mb-2">Minha Votação</h1>
       <p className="text-ink-300 text-center mb-10">
-        Acompanhe em quais categorias você já votou — sem ver resultados ou ranking.
+        Acompanhe em quais categorias você já votou. O ranking de uma categoria só aparece depois que você vota
+        nela.
       </p>
 
       {screen === 'phone' && (
@@ -261,53 +269,56 @@ export default function MinhaVotacaoPage() {
           </div>
 
           <div className="space-y-2">
-            {(() => {
-              const maxVotes = Math.max(1, ...categories.map((c) => c.totalVotes ?? 0));
-              return categories.map((c) => (
+            {categories.map((c) => (
+              <div
+                key={c.id}
+                className={`rounded-xl border transition-colors ${
+                  c.status === 'PENDING' ? 'bg-ink-800/60 border-ink-700' : 'bg-ink-900/40 border-ink-800'
+                }`}
+              >
                 <Link
-                  key={c.id}
                   href={`/votar/${c.slug}`}
-                  className={`flex flex-col gap-2 rounded-xl p-4 border transition-colors ${
-                    c.status === 'PENDING'
-                      ? 'bg-ink-800/60 border-ink-700 hover:border-gold-400'
-                      : 'bg-ink-900/40 border-ink-800'
-                  }`}
+                  className={`flex items-center gap-3 p-4 ${c.status === 'PENDING' ? 'hover:border-gold-400' : ''}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">{c.emoji}</span>
-                    <span className="flex-1 font-medium">{c.name}</span>
-                    {c.status === 'VOTED' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full border border-green-500/40 text-green-400">
-                        Votou
-                      </span>
-                    )}
-                    {c.status === 'SKIPPED' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full border border-ink-600 text-ink-400">
-                        Pulou
-                      </span>
-                    )}
-                    {c.status === 'PENDING' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full border border-gold-500/40 text-gold-300">
-                        Pendente
-                      </span>
-                    )}
-                  </div>
-                  {c.status === 'VOTED' && c.totalVotes !== null && (
-                    <div className="flex items-center gap-2 pl-9">
-                      <div className="flex-1 bg-ink-950 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="h-full bg-gold-400 rounded-full"
-                          style={{ width: `${(c.totalVotes / maxVotes) * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-ink-500 shrink-0">
-                        {c.totalVotes} {c.totalVotes === 1 ? 'voto' : 'votos'} no total
-                      </span>
-                    </div>
+                  <span className="text-xl">{c.emoji}</span>
+                  <span className="flex-1 font-medium">{c.name}</span>
+                  {c.status === 'VOTED' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full border border-green-500/40 text-green-400">
+                      Votou
+                    </span>
+                  )}
+                  {c.status === 'SKIPPED' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full border border-ink-600 text-ink-400">
+                      Pulou
+                    </span>
+                  )}
+                  {c.status === 'PENDING' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full border border-gold-500/40 text-gold-300">
+                      Pendente
+                    </span>
                   )}
                 </Link>
-              ));
-            })()}
+                {c.status === 'VOTED' && c.ranking && c.ranking.length > 0 && (
+                  <div className="px-4 pb-4 pl-12 space-y-2">
+                    {c.ranking.map((r, i) => (
+                      <div key={r.companyId} className="flex items-center gap-2">
+                        <span className="text-xs text-ink-500 w-4 shrink-0">{i + 1}º</span>
+                        <span className="text-xs text-ink-300 w-28 sm:w-36 truncate shrink-0">{r.companyName}</span>
+                        <div className="flex-1 bg-ink-950 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="h-full bg-gold-400 rounded-full"
+                            style={{ width: `${r.percentage}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-ink-500 shrink-0">
+                          {r.votes} ({r.percentage}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
             {categories.length === 0 && (
               <p className="text-center text-ink-400 text-sm">Nenhuma categoria disponível no momento.</p>
             )}
