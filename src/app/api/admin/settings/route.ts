@@ -1,24 +1,19 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin, requireSuperAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 
 export async function GET() {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
-  let settings = await prisma.eventSettings.findFirst();
-  if (!settings) {
-    settings = await prisma.eventSettings.create({ data: {} });
-  }
+  const settings = await prisma.eventSettings.findUnique({ where: { cityId: cityId! } });
   return NextResponse.json({ settings });
 }
 
 const updateSchema = z.object({
   eventName: z.string().min(2).max(120).optional(),
   eventYear: z.number().int().optional(),
-  city: z.string().max(120).optional(),
-  state: z.string().max(2).optional(),
   logoUrl: z.string().url().optional().nullable().or(z.literal('')),
   heroTitle: z.string().max(160).optional(),
   heroSubtitle: z.string().max(300).optional(),
@@ -31,8 +26,11 @@ const updateSchema = z.object({
   autoSchedule: z.boolean().optional(),
 });
 
+// Configurações de evento agora são por cidade — um "editor" (admin de
+// cidade) também pode ajustar as configurações da própria cidade; só a
+// gestão de cidades em si (criar/apagar/renomear) é exclusiva do super admin.
 export async function PUT(req: Request) {
-  const { error } = await requireSuperAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const json = await req.json().catch(() => null);
@@ -41,16 +39,18 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }, { status: 400 });
   }
 
-  let settings = await prisma.eventSettings.findFirst();
-  if (!settings) {
-    settings = await prisma.eventSettings.create({ data: {} });
-  }
-
   const { startsAt, endsAt, logoUrl, ...rest } = parsed.data;
 
-  const updated = await prisma.eventSettings.update({
-    where: { id: settings.id },
-    data: {
+  const updated = await prisma.eventSettings.upsert({
+    where: { cityId: cityId! },
+    create: {
+      cityId: cityId!,
+      ...rest,
+      logoUrl: logoUrl || null,
+      startsAt: startsAt ? new Date(startsAt) : null,
+      endsAt: endsAt ? new Date(endsAt) : null,
+    },
+    update: {
       ...rest,
       logoUrl: logoUrl === '' ? null : logoUrl,
       startsAt: startsAt ? new Date(startsAt) : startsAt === null ? null : undefined,

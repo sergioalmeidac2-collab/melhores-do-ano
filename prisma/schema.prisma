@@ -36,12 +36,31 @@ datasource db {
 // Poderiam virar enum nativo do Postgres numa iteração futura; mantidos como
 // String por ora para não introduzir uma migração de tipo sem banco real para testar.
 
+// Uma cidade = um cliente/contrato = uma votação inteira isolada (categorias,
+// empresas, votos, configurações e origens próprias). O nome e o estado
+// vivem aqui agora, não mais soltos em EventSettings — cada cidade É a
+// "instância" do produto para aquele contrato.
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  state     String   @default("")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  eventSettings EventSettings?
+  categories    Category[]
+  companies     Company[]
+  votes         Vote[]
+  voteSources   VoteSource[]
+  admins        Admin[]
+}
+
 model EventSettings {
   id            String       @id @default(cuid())
+  cityId        String       @unique
   eventName     String       @default("Melhores do Ano")
   eventYear     Int          @default(2026)
-  city          String       @default("")
-  state         String       @default("")
   logoUrl       String?
   heroTitle     String       @default("MELHORES DO ANO")
   heroSubtitle  String       @default("Escolha as empresas que mais se destacaram na sua cidade.")
@@ -53,6 +72,8 @@ model EventSettings {
   endsAt        DateTime?
   autoSchedule  Boolean      @default(false)
   updatedAt     DateTime     @updatedAt
+
+  city City @relation(fields: [cityId], references: [id], onDelete: Cascade)
 }
 
 model Admin {
@@ -61,14 +82,20 @@ model Admin {
   email        String   @unique
   passwordHash String
   role         String   @default("admin") // admin | editor
+  // null = admin dono da plataforma, vê/gerencia todas as cidades.
+  // preenchido = "admin da cidade" (editor), só enxerga essa cidade.
+  cityId       String?
   createdAt    DateTime @default(now())
   auditLogs    AuditLog[]
+
+  city City? @relation(fields: [cityId], references: [id], onDelete: Cascade)
 }
 
 model Category {
   id          String   @id @default(cuid())
+  cityId      String
   name        String
-  slug        String   @unique
+  slug        String
   description String?
   imageUrl    String?
   emoji       String   @default("🏆")
@@ -77,17 +104,20 @@ model Category {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  city      City              @relation(fields: [cityId], references: [id], onDelete: Cascade)
   companies CategoryCompany[]
   votes     Vote[]
   instagramCommentVotes InstagramCommentVote[]
 
-  @@index([active, order])
+  @@unique([cityId, slug])
+  @@index([cityId, active, order])
 }
 
 model Company {
   id          String   @id @default(cuid())
+  cityId      String
   name        String
-  slug        String   @unique
+  slug        String
   description String?
   logoUrl     String?
   instagram   String?
@@ -100,9 +130,12 @@ model Company {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  city       City              @relation(fields: [cityId], references: [id], onDelete: Cascade)
   categories CategoryCompany[]
   votes      Vote[]
   instagramCommentVotes InstagramCommentVote[]
+
+  @@unique([cityId, slug])
 }
 
 // Junction table: uma empresa pode participar de várias categorias
@@ -137,8 +170,9 @@ model Participant {
 
 model VoteSource {
   id           String   @id @default(cuid())
+  cityId       String
   label        String   // ex: "QR Code Restaurante", "Instagram Bio"
-  slug         String   @unique
+  slug         String
   utmSource    String?
   utmMedium    String?
   utmCampaign  String?
@@ -146,11 +180,15 @@ model VoteSource {
   utmTerm      String?
   createdAt    DateTime @default(now())
 
+  city  City   @relation(fields: [cityId], references: [id], onDelete: Cascade)
   votes Vote[]
+
+  @@unique([cityId, slug])
 }
 
 model Vote {
   id             String                @id @default(cuid())
+  cityId         String
   categoryId     String
   companyId      String? // null quando o participante pulou a categoria (status SKIPPED)
   participantId  String
@@ -174,14 +212,17 @@ model Vote {
 
   createdAt      DateTime @default(now())
 
+  city        City        @relation(fields: [cityId], references: [id], onDelete: Cascade)
   category    Category    @relation(fields: [categoryId], references: [id])
   company     Company?    @relation(fields: [companyId], references: [id])
   participant Participant @relation(fields: [participantId], references: [id])
   voteSource  VoteSource? @relation(fields: [voteSourceId], references: [id])
 
   // Regra antifraude principal: 1 voto (ou 1 pulo) por telefone por categoria
+  // dentro da MESMA cidade — a mesma pessoa pode votar na categoria
+  // "Melhor Pizzaria" de duas cidades diferentes sem problema.
   @@unique([participantId, categoryId])
-  @@index([categoryId, companyId])
+  @@index([cityId, categoryId, companyId])
   @@index([createdAt])
   @@index([ipHash, createdAt])
 }

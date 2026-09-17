@@ -1,14 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 interface Settings {
   id: string;
   eventName: string;
   eventYear: number;
-  city: string;
-  state: string;
   heroTitle: string;
   heroSubtitle: string;
   votesPerCategory: number;
@@ -17,21 +14,15 @@ interface Settings {
 }
 
 export default function AdminSettingsPage() {
-  const router = useRouter();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    fetch('/api/admin/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.role !== 'admin') router.replace('/admin');
-      });
     fetch('/api/admin/settings')
       .then((r) => r.json())
       .then((d) => setSettings(d.settings));
-  }, [router]);
+  }, []);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -73,28 +64,9 @@ export default function AdminSettingsPage() {
             />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Cidade">
-            <input
-              className="input"
-              value={settings.city}
-              onChange={(e) => setSettings({ ...settings, city: e.target.value })}
-              placeholder="Ex: Perdizes"
-            />
-          </Field>
-          <Field label="Estado (UF)">
-            <input
-              className="input"
-              value={settings.state}
-              maxLength={2}
-              onChange={(e) => setSettings({ ...settings, state: e.target.value.toUpperCase() })}
-              placeholder="Ex: MG"
-            />
-          </Field>
-        </div>
         <p className="text-ink-500 text-xs">
-          Cidade e estado identificam esta votação — útil para quando cada cidade tiver sua própria página
-          (ex: melhoresdoano2026.com.br/perdizes-mg) numa próxima etapa do sistema.
+          Nome e estado da cidade agora são gerenciados na tela{' '}
+          <a href="/admin/cidades" className="underline hover:text-ink-300">Cidades</a>.
         </p>
       </div>
 

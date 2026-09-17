@@ -39,6 +39,9 @@ export interface AdminSessionPayload {
   adminId: string;
   email: string;
   role: string;
+  // null = admin dono da plataforma (vê todas as cidades via seletor).
+  // preenchido = "admin da cidade" (editor), travado nessa cidade.
+  cityId: string | null;
   exp: number;
 }
 

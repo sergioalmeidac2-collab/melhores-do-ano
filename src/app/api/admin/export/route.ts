@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import { formatNormalizedPhone } from '@/lib/phone';
 
 function csvEscape(value: string | number | null | undefined): string {
@@ -11,14 +11,14 @@ function csvEscape(value: string | number | null | undefined): string {
 }
 
 export async function GET(req: Request) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const url = new URL(req.url);
   const categoryId = url.searchParams.get('categoryId') || undefined;
 
   const votes = await prisma.vote.findMany({
-    where: { categoryId },
+    where: { cityId: cityId!, categoryId },
     orderBy: { createdAt: 'desc' },
     include: { category: true, company: true, participant: true, voteSource: true },
   });

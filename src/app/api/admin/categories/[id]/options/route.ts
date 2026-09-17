@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import { slugify } from '@/lib/slug';
 
 const schema = z.object({
   names: z.array(z.string().trim().min(1).max(160)).min(1).max(200),
 });
 
-async function uniqueCompanySlug(name: string): Promise<string> {
+async function uniqueCompanySlug(cityId: string, name: string): Promise<string> {
   const base = slugify(name);
   let slug = base;
   let n = 1;
-  while (await prisma.company.findUnique({ where: { slug } })) {
+  while (await prisma.company.findUnique({ where: { cityId_slug: { cityId, slug } } })) {
     n += 1;
     slug = `${base}-${n}`;
   }
@@ -23,11 +23,11 @@ async function uniqueCompanySlug(name: string): Promise<string> {
 // passar pela tela de Empresas e marcar a categoria manualmente — útil para
 // popular em lote uma categoria recém-importada que ainda não tem opções.
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const category = await prisma.category.findUnique({ where: { id: params.id } });
-  if (!category) {
+  if (!category || category.cityId !== cityId) {
     return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
   }
 
@@ -51,9 +51,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   let created = 0;
   for (let i = 0; i < names.length; i++) {
     const name = names[i];
-    const companySlug = await uniqueCompanySlug(name);
+    const companySlug = await uniqueCompanySlug(cityId!, name);
     await prisma.company.create({
       data: {
+        cityId: cityId!,
         name,
         slug: companySlug,
         categories: { create: { categoryId: category.id, order: maxOrder + i + 1 } },

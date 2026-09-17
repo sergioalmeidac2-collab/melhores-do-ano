@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolvePublicCityId } from '@/lib/publicCity';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const cityId = await resolvePublicCityId(url.searchParams.get('city'));
+  if (!cityId) {
+    return NextResponse.json({ categories: [] });
+  }
+
   const categories = await prisma.category.findMany({
-    where: { active: true },
+    where: { active: true, cityId },
     orderBy: { order: 'asc' },
     select: {
       id: true,

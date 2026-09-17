@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolvePublicCityId } from '@/lib/publicCity';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  let settings = await prisma.eventSettings.findFirst();
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const cityId = await resolvePublicCityId(url.searchParams.get('city'));
+  if (!cityId) {
+    return NextResponse.json({ error: 'Nenhuma cidade cadastrada ainda.' }, { status: 404 });
+  }
 
+  const city = await prisma.city.findUnique({ where: { id: cityId } });
+  let settings = await prisma.eventSettings.findUnique({ where: { cityId } });
   if (!settings) {
-    settings = await prisma.eventSettings.create({ data: {} });
+    settings = await prisma.eventSettings.create({ data: { cityId } });
   }
 
   // status automático por data, se habilitado
@@ -22,7 +29,8 @@ export async function GET() {
   return NextResponse.json({
     eventName: settings.eventName,
     eventYear: settings.eventYear,
-    city: settings.city,
+    city: city?.name ?? null,
+    state: city?.state ?? null,
     logoUrl: settings.logoUrl,
     heroTitle: settings.heroTitle,
     heroSubtitle: settings.heroSubtitle,

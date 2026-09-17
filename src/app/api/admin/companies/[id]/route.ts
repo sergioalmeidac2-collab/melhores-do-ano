@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import { normalizeInstagram } from '@/lib/instagram';
 
 const updateSchema = z.object({
@@ -16,8 +16,13 @@ const updateSchema = z.object({
 });
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
+
+  const existing = await prisma.company.findUnique({ where: { id: params.id } });
+  if (!existing || existing.cityId !== cityId) {
+    return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 });
+  }
 
   const json = await req.json().catch(() => null);
   const parsed = updateSchema.safeParse(json);
@@ -27,17 +32,26 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   const { categoryIds, instagram, logoUrl, ...rest } = parsed.data;
 
+  let validCategoryIds: string[] | undefined;
+  if (categoryIds) {
+    const validCategories = await prisma.category.findMany({
+      where: { id: { in: categoryIds }, cityId: cityId! },
+      select: { id: true },
+    });
+    validCategoryIds = validCategories.map((c) => c.id);
+  }
+
   const company = await prisma.company.update({
     where: { id: params.id },
     data: {
       ...rest,
       logoUrl: logoUrl === '' ? null : logoUrl,
       instagram: instagram !== undefined ? normalizeInstagram(instagram) : undefined,
-      ...(categoryIds
+      ...(validCategoryIds
         ? {
             categories: {
               deleteMany: {},
-              create: categoryIds.map((categoryId, idx) => ({ categoryId, order: idx })),
+              create: validCategoryIds.map((categoryId, idx) => ({ categoryId, order: idx })),
             },
           }
         : {}),
@@ -49,8 +63,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
+
+  const existing = await prisma.company.findUnique({ where: { id: params.id } });
+  if (!existing || existing.cityId !== cityId) {
+    return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 });
+  }
 
   const voteCount = await prisma.vote.count({ where: { companyId: params.id } });
   if (voteCount > 0) {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 
 const patchSchema = z.object({
   status: z.enum(['VALID', 'SUSPICIOUS', 'INVALID', 'SKIPPED']).optional(),
@@ -11,7 +11,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const { session, error } = await requireAdmin();
+  const { session, cityId, error } = await requireCityScope();
   if (error) return error;
 
   const json = await req.json().catch(() => null);
@@ -21,7 +21,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   const vote = await prisma.vote.findUnique({ where: { id: params.id }, include: { participant: true } });
-  if (!vote) {
+  if (!vote || vote.cityId !== cityId) {
     return NextResponse.json({ error: 'Voto não encontrado.' }, { status: 404 });
   }
 

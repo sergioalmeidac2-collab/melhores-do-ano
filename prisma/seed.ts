@@ -21,10 +21,13 @@ async function main() {
     console.log(`Admin já existe: ${email}`);
   }
 
-  const settings = await prisma.eventSettings.findFirst();
-  if (!settings) {
-    await prisma.eventSettings.create({ data: {} });
-    console.log('Configurações padrão do evento criadas.');
+  const city = await prisma.city.findFirst({ orderBy: { createdAt: 'asc' } });
+  if (city) {
+    const settings = await prisma.eventSettings.findUnique({ where: { cityId: city.id } });
+    if (!settings) {
+      await prisma.eventSettings.create({ data: { cityId: city.id } });
+      console.log('Configurações padrão do evento criadas.');
+    }
   }
 }
 

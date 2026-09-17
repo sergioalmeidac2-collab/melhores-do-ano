@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import { slugify } from '@/lib/slug';
 
 export async function GET() {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const sources = await prisma.voteSource.findMany({
+    where: { cityId: cityId! },
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { votes: true } } },
   });
@@ -25,7 +26,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const json = await req.json().catch(() => null);
@@ -37,13 +38,13 @@ export async function POST(req: Request) {
   const base = slugify(parsed.data.label);
   let slug = base;
   let n = 1;
-  while (await prisma.voteSource.findUnique({ where: { slug } })) {
+  while (await prisma.voteSource.findUnique({ where: { cityId_slug: { cityId: cityId!, slug } } })) {
     n += 1;
     slug = `${base}-${n}`;
   }
 
   const source = await prisma.voteSource.create({
-    data: { ...parsed.data, slug },
+    data: { ...parsed.data, cityId: cityId!, slug },
   });
 
   return NextResponse.json({ source });

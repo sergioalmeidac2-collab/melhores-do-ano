@@ -5,8 +5,10 @@ import { validateAndNormalizeBrazilPhone } from '@/lib/phone';
 import { normalizeInstagram } from '@/lib/instagram';
 import { checkRateLimit, getClientIp, hashIp, isPhoneBlocked, isSessionBlocked } from '@/lib/fraud';
 import { slugify } from '@/lib/slug';
+import { resolvePublicCityId } from '@/lib/publicCity';
 
 const voteSchema = z.object({
+  citySlug: z.string().optional().nullable(),
   categorySlug: z.string().min(1),
   companySlug: z.string().min(1).optional(),
   // "escreva sua opção": voto em uma empresa que ainda não está cadastrada
@@ -90,7 +92,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const settings = await prisma.eventSettings.findFirst();
+  const cityId = await resolvePublicCityId(data.citySlug);
+  if (!cityId) {
+    return NextResponse.json({ error: 'Nenhuma cidade cadastrada ainda.' }, { status: 404 });
+  }
+
+  const settings = await prisma.eventSettings.findUnique({ where: { cityId } });
   if (settings?.votingStatus === 'NOT_STARTED') {
     return NextResponse.json({ error: 'A votação ainda não começou.' }, { status: 403 });
   }
@@ -98,7 +105,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'A votação já foi encerrada.' }, { status: 403 });
   }
 
-  const category = await prisma.category.findUnique({ where: { slug: data.categorySlug } });
+  const category = await prisma.category.findUnique({ where: { cityId_slug: { cityId, slug: data.categorySlug } } });
   if (!category || !category.active) {
     return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
   }
@@ -106,7 +113,7 @@ export async function POST(req: Request) {
   let company: Awaited<ReturnType<typeof prisma.company.findUnique>> = null;
   if (!data.skip) {
     if (data.companySlug) {
-      company = await prisma.company.findUnique({ where: { slug: data.companySlug } });
+      company = await prisma.company.findUnique({ where: { cityId_slug: { cityId, slug: data.companySlug } } });
       if (!company || !company.active) {
         return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 });
       }
@@ -134,12 +141,13 @@ export async function POST(req: Request) {
         const base = slugify(data.newCompanyName);
         let slug = base;
         let n = 1;
-        while (await prisma.company.findUnique({ where: { slug } })) {
+        while (await prisma.company.findUnique({ where: { cityId_slug: { cityId, slug } } })) {
           n += 1;
           slug = `${base}-${n}`;
         }
         company = await prisma.company.create({
           data: {
+            cityId,
             name: data.newCompanyName,
             slug,
             approved: false,
@@ -156,7 +164,7 @@ export async function POST(req: Request) {
 
   let voteSourceId: string | null = null;
   if (data.sourceSlug) {
-    const source = await prisma.voteSource.findUnique({ where: { slug: data.sourceSlug } });
+    const source = await prisma.voteSource.findUnique({ where: { cityId_slug: { cityId, slug: data.sourceSlug } } });
     if (source) voteSourceId = source.id;
   }
 
@@ -202,6 +210,7 @@ export async function POST(req: Request) {
   }
 
   const voteData = {
+    cityId,
     companyId: company?.id ?? null,
     voteSourceId,
     utmSource: data.utmSource || null,

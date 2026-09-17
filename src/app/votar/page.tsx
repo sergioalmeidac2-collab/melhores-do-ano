@@ -2,11 +2,13 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { ProgressBar } from '@/components/ProgressBar';
 import { getCategoryImageUrl } from '@/lib/categoryImage';
+import { resolvePublicCityId } from '@/lib/publicCity';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ChooseCategoryPage() {
-  const settings = await prisma.eventSettings.findFirst();
+  const cityId = await resolvePublicCityId();
+  const settings = cityId ? await prisma.eventSettings.findUnique({ where: { cityId } }) : null;
 
   if (settings?.votingStatus === 'NOT_STARTED') {
     return <StatusMessage title="Em breve iniciaremos a votação." subtitle="Volte em breve para escolher seus favoritos." />;
@@ -15,15 +17,17 @@ export default async function ChooseCategoryPage() {
     return <StatusMessage title="A votação foi encerrada." subtitle="Obrigado a todos que participaram do Melhores do Ano." />;
   }
 
-  const categories = await prisma.category.findMany({
-    where: { active: true },
-    orderBy: { order: 'asc' },
-    include: { _count: { select: { companies: true } } },
-  });
+  const categories = cityId
+    ? await prisma.category.findMany({
+        where: { active: true, cityId },
+        orderBy: { order: 'asc' },
+        include: { _count: { select: { companies: true } } },
+      })
+    : [];
   const visible = categories.filter((c) => c._count.companies > 0);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10 sm:py-16">
+    <div className="max-w-4xl mx-auto px-4 py-10 sm:py-16 uppercase">
       <ProgressBar step={1} totalSteps={4} />
       <h1 className="font-display text-3xl sm:text-4xl font-bold text-center mb-2">Escolha uma categoria</h1>
       <p className="text-ink-300 text-center mb-10">Selecione a categoria em que você quer votar.</p>
@@ -60,7 +64,7 @@ export default async function ChooseCategoryPage() {
 
 function StatusMessage({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-6 gap-3">
+    <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-6 gap-3 uppercase">
       <h1 className="font-display text-3xl font-bold">{title}</h1>
       <p className="text-ink-300">{subtitle}</p>
       <Link href="/" className="text-gold-400 underline underline-offset-4 mt-4">

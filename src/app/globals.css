@@ -44,6 +44,16 @@ body {
   animation: pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Tailwind's preflight zera text-transform em button/select — sem isso,
+   o wrapper .uppercase não alcança esses elementos. */
+.uppercase button,
+.uppercase select,
+.uppercase input,
+.uppercase textarea,
+.uppercase input::placeholder {
+  text-transform: uppercase;
+}
+
 @layer components {
   .input {
     @apply w-full rounded-xl bg-ink-800 border border-ink-700 px-4 py-3 text-ink-50 placeholder:text-ink-500 outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400 transition-colors;

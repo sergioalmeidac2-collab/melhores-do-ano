@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import type { Prisma } from '@prisma/client';
 
 export async function GET(req: Request) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const url = new URL(req.url);
@@ -21,6 +21,7 @@ export async function GET(req: Request) {
   const pageSize = Math.min(Number(url.searchParams.get('pageSize') ?? '50'), 200);
 
   const where: Prisma.VoteWhereInput = {
+    cityId: cityId!,
     categoryId,
     companyId,
     status: status || undefined,

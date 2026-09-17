@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 
 const updateSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
@@ -13,8 +13,13 @@ const updateSchema = z.object({
 });
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
+
+  const existing = await prisma.category.findUnique({ where: { id: params.id } });
+  if (!existing || existing.cityId !== cityId) {
+    return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
+  }
 
   const json = await req.json().catch(() => null);
   const parsed = updateSchema.safeParse(json);
@@ -33,8 +38,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
+
+  const existing = await prisma.category.findUnique({ where: { id: params.id } });
+  if (!existing || existing.cityId !== cityId) {
+    return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
+  }
 
   const voteCount = await prisma.vote.count({ where: { categoryId: params.id } });
   if (voteCount > 0) {

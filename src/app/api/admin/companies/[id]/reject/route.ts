@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 
 // Rejeita uma empresa sugerida por um votante ("escreva sua opção"): remove
 // o voto associado, o vínculo com a categoria e a própria empresa. Diferente
@@ -8,11 +8,11 @@ import { requireAdmin } from '@/lib/requireAdmin';
 // desativando em vez de apagar), aqui a intenção é realmente descartar uma
 // sugestão indevida — spam, duplicata ou nome ofensivo.
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const company = await prisma.company.findUnique({ where: { id: params.id } });
-  if (!company) {
+  if (!company || company.cityId !== cityId) {
     return NextResponse.json({ error: 'Empresa não encontrada.' }, { status: 404 });
   }
 

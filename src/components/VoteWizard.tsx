@@ -63,10 +63,16 @@ function saveKnownParticipant(data: KnownParticipant) {
   localStorage.setItem(PARTICIPANT_STORAGE_KEY, JSON.stringify(data));
 }
 
-export function VoteWizard({ categorySlug }: { categorySlug: string }) {
-  const [step, setStep] = useState<Step>('loading');
-  const [category, setCategory] = useState<CategoryData | null>(null);
-  const [companies, setCompanies] = useState<Company[]>([]);
+interface VoteWizardProps {
+  categorySlug: string;
+  initialCategory?: CategoryData | null;
+  initialCompanies?: Company[];
+}
+
+export function VoteWizard({ categorySlug, initialCategory, initialCompanies }: VoteWizardProps) {
+  const [step, setStep] = useState<Step>(initialCategory ? 'choose-company' : initialCategory === null ? 'error' : 'loading');
+  const [category, setCategory] = useState<CategoryData | null>(initialCategory ?? null);
+  const [companies, setCompanies] = useState<Company[]>(initialCompanies ?? []);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -84,8 +90,6 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
       phone: known ? maskBrazilPhone(known.phone.replace(/^55/, '')) : '',
       instagram: known?.instagram ?? '',
       email: known?.email ?? '',
-      city: '',
-      neighborhood: '',
       howFoundOut: '',
       consentTerms: known?.consentTerms ?? false,
       consentMarketing: known?.consentMarketing ?? false,
@@ -111,6 +115,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
   }, []);
 
   useEffect(() => {
+    if (initialCategory !== undefined) return; // já veio pronto do servidor
     let cancelled = false;
     fetch(`/api/public/categories/${categorySlug}/companies`)
       .then((r) => {
@@ -129,6 +134,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categorySlug]);
 
   // Já sabemos quem é (login por telefone em /minha-votacao ou voto anterior
@@ -220,8 +226,6 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
           phone: form.phone,
           instagram: form.instagram || null,
           email: form.email || null,
-          city: form.city || null,
-          neighborhood: form.neighborhood || null,
           howFoundOut: form.howFoundOut || null,
           // se já é um participante conhecido, ele aceitou os termos em
           // algum momento anterior para o cadastro existir — não depende do
@@ -264,7 +268,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
   if (step === 'loading') {
     return (
-      <div className="flex items-center justify-center min-h-[50vh] text-ink-300">
+      <div className="flex items-center justify-center min-h-[50vh] text-ink-300 uppercase">
         Carregando categoria...
       </div>
     );
@@ -272,7 +276,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
   if (step === 'error') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center gap-4 px-6">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center gap-4 px-6 uppercase">
         <p className="text-ink-200 text-lg">Categoria não encontrada ou indisponível.</p>
         <Link href="/votar" className="text-gold-400 underline underline-offset-4">
           Ver todas as categorias
@@ -285,18 +289,34 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
   const stepNumber = step === 'choose-company' ? 2 : step === 'identify' ? 3 : step === 'confirm' ? 4 : 4;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10 sm:py-16">
+    <div className="max-w-3xl mx-auto px-4 py-10 sm:py-16 uppercase">
       {step !== 'success' && <ProgressBar step={stepNumber} totalSteps={totalSteps} />}
 
       {step === 'choose-company' && category && (
         <div className="animate-fade-in-up">
+          <Link
+            href="/votar"
+            className="inline-flex items-center gap-1.5 text-ink-400 hover:text-ink-200 text-sm mb-4"
+          >
+            ← Ver todas as categorias
+          </Link>
           <div className="relative w-full h-40 sm:h-52 rounded-2xl overflow-hidden mb-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={getCategoryImageUrl(category)} alt="" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/10 to-transparent" />
           </div>
           {errorMessage && (
-            <p className="text-red-400 text-sm text-center mb-4">{errorMessage}</p>
+            <div className="text-center mb-4">
+              <p className="text-red-400 text-sm">{errorMessage}</p>
+              {errorMessage.includes('já votou') && (
+                <Link
+                  href="/minha-votacao"
+                  className="inline-block mt-2 text-gold-400 underline underline-offset-4 text-sm"
+                >
+                  Ver minha votação
+                </Link>
+              )}
+            </div>
           )}
           <p className="text-gold-400 text-sm tracking-[0.2em] uppercase text-center mb-2">
             {category.emoji} {category.name}
@@ -349,9 +369,9 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
 
           <form onSubmit={chooseWriteIn} className="mt-6 bg-ink-800/40 border border-dashed border-ink-700 rounded-2xl p-4">
             <p className="text-ink-400 text-xs mb-2">Não encontrou quem procurava? Digite o nome:</p>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
-                className="input"
+                className="input flex-1 min-w-0"
                 value={writeInInput}
                 onChange={(e) => setWriteInInput(e.target.value)}
                 placeholder="Nome da empresa"
@@ -425,7 +445,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
             />
           </Field>
 
-          <Field label="Instagram (opcional)">
+          <Field label="Instagram">
             <input
               className="input"
               value={form.instagram}
@@ -434,24 +454,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Cidade (opcional)">
-              <input
-                className="input"
-                value={form.city}
-                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-              />
-            </Field>
-            <Field label="Bairro (opcional)">
-              <input
-                className="input"
-                value={form.neighborhood}
-                onChange={(e) => setForm((f) => ({ ...f, neighborhood: e.target.value }))}
-              />
-            </Field>
-          </div>
-
-          <Field label="E-mail (opcional)">
+          <Field label="E-mail">
             <input
               type="email"
               className="input"
@@ -460,7 +463,7 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
             />
           </Field>
 
-          <Field label="Como conheceu o Melhores do Ano? (opcional)">
+          <Field label="Como conheceu o Melhores do Ano?">
             <input
               className="input"
               value={form.howFoundOut}
@@ -533,7 +536,11 @@ export function VoteWizard({ categorySlug }: { categorySlug: string }) {
           {errorMessage && <p className="text-red-400 text-sm text-center">{errorMessage}</p>}
 
           <div className="flex gap-3">
-            <button type="button" onClick={() => setStep('identify')} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => setStep(canSkipIdentifyStep ? 'choose-company' : 'identify')}
+              className="btn-secondary"
+            >
               Voltar
             </button>
             <button

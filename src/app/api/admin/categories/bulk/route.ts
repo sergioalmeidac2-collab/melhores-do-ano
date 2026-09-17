@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import { slugify } from '@/lib/slug';
 import { guessCategoryEmoji } from '@/lib/categoryEmoji';
 
@@ -13,7 +13,7 @@ const bulkSchema = z.object({
 // (comparação por nome, case-insensitive). Útil para importar uma lista de
 // referência de categorias de uma vez, em vez de cadastrar uma por uma.
 export async function POST(req: Request) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const json = await req.json().catch(() => null);
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }, { status: 400 });
   }
 
-  const existing = await prisma.category.findMany({ select: { name: true } });
+  const existing = await prisma.category.findMany({ where: { cityId: cityId! }, select: { name: true } });
   const existingNames = new Set(existing.map((c) => c.name.toLowerCase()));
 
   const uniqueNewNames = Array.from(
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     ),
   );
 
-  const maxOrder = await prisma.category.aggregate({ _max: { order: true } });
+  const maxOrder = await prisma.category.aggregate({ where: { cityId: cityId! }, _max: { order: true } });
   let nextOrder = (maxOrder._max.order ?? 0) + 1;
 
   let created = 0;
@@ -41,12 +41,12 @@ export async function POST(req: Request) {
     const base = slugify(name);
     let slug = base;
     let n = 1;
-    while (await prisma.category.findUnique({ where: { slug } })) {
+    while (await prisma.category.findUnique({ where: { cityId_slug: { cityId: cityId!, slug } } })) {
       n += 1;
       slug = `${base}-${n}`;
     }
     await prisma.category.create({
-      data: { name, slug, order: nextOrder, emoji: guessCategoryEmoji(name) },
+      data: { cityId: cityId!, name, slug, order: nextOrder, emoji: guessCategoryEmoji(name) },
     });
     nextOrder += 1;
     created += 1;

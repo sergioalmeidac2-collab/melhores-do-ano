@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import { slugify } from '@/lib/slug';
 import { normalizeInstagram } from '@/lib/instagram';
 
 export async function GET() {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const companies = await prisma.company.findMany({
+    where: { cityId: cityId! },
     orderBy: { name: 'asc' },
     include: {
       categories: { include: { category: true } },
@@ -30,7 +31,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const json = await req.json().catch(() => null);
@@ -39,16 +40,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }, { status: 400 });
   }
 
+  const validCategories = await prisma.category.findMany({
+    where: { id: { in: parsed.data.categoryIds }, cityId: cityId! },
+    select: { id: true },
+  });
+  if (validCategories.length === 0) {
+    return NextResponse.json({ error: 'Selecione ao menos uma categoria válida.' }, { status: 400 });
+  }
+  const validCategoryIds = new Set(validCategories.map((c) => c.id));
+
   const base = slugify(parsed.data.name);
   let slug = base;
   let n = 1;
-  while (await prisma.company.findUnique({ where: { slug } })) {
+  while (await prisma.company.findUnique({ where: { cityId_slug: { cityId: cityId!, slug } } })) {
     n += 1;
     slug = `${base}-${n}`;
   }
 
   const company = await prisma.company.create({
     data: {
+      cityId: cityId!,
       name: parsed.data.name,
       slug,
       description: parsed.data.description || null,
@@ -57,7 +68,9 @@ export async function POST(req: Request) {
       phone: parsed.data.phone || null,
       active: parsed.data.active,
       categories: {
-        create: parsed.data.categoryIds.map((categoryId, idx) => ({ categoryId, order: idx })),
+        create: parsed.data.categoryIds
+          .filter((id) => validCategoryIds.has(id))
+          .map((categoryId, idx) => ({ categoryId, order: idx })),
       },
     },
     include: { categories: { include: { category: true } } },

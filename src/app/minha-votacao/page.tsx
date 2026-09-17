@@ -11,6 +11,7 @@ interface CategoryProgress {
   emoji: string;
   imageUrl: string | null;
   status: 'VOTED' | 'SKIPPED' | 'PENDING';
+  totalVotes: number | null;
 }
 
 interface Participant {
@@ -138,7 +139,7 @@ export default function MinhaVotacaoPage() {
   const votedCount = categories.filter((c) => c.status !== 'PENDING').length;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-12 sm:py-16">
+    <div className="max-w-2xl mx-auto px-4 py-12 sm:py-16 uppercase">
       <h1 className="font-display text-3xl font-bold text-center mb-2">Minha Votação</h1>
       <p className="text-ink-300 text-center mb-10">
         Acompanhe em quais categorias você já votou — sem ver resultados ou ranking.
@@ -260,35 +261,53 @@ export default function MinhaVotacaoPage() {
           </div>
 
           <div className="space-y-2">
-            {categories.map((c) => (
-              <Link
-                key={c.id}
-                href={`/votar/${c.slug}`}
-                className={`flex items-center gap-3 rounded-xl p-4 border transition-colors ${
-                  c.status === 'PENDING'
-                    ? 'bg-ink-800/60 border-ink-700 hover:border-gold-400'
-                    : 'bg-ink-900/40 border-ink-800'
-                }`}
-              >
-                <span className="text-xl">{c.emoji}</span>
-                <span className="flex-1 font-medium">{c.name}</span>
-                {c.status === 'VOTED' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border border-green-500/40 text-green-400">
-                    Votou
-                  </span>
-                )}
-                {c.status === 'SKIPPED' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border border-ink-600 text-ink-400">
-                    Pulou
-                  </span>
-                )}
-                {c.status === 'PENDING' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border border-gold-500/40 text-gold-300">
-                    Pendente
-                  </span>
-                )}
-              </Link>
-            ))}
+            {(() => {
+              const maxVotes = Math.max(1, ...categories.map((c) => c.totalVotes ?? 0));
+              return categories.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/votar/${c.slug}`}
+                  className={`flex flex-col gap-2 rounded-xl p-4 border transition-colors ${
+                    c.status === 'PENDING'
+                      ? 'bg-ink-800/60 border-ink-700 hover:border-gold-400'
+                      : 'bg-ink-900/40 border-ink-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{c.emoji}</span>
+                    <span className="flex-1 font-medium">{c.name}</span>
+                    {c.status === 'VOTED' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border border-green-500/40 text-green-400">
+                        Votou
+                      </span>
+                    )}
+                    {c.status === 'SKIPPED' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border border-ink-600 text-ink-400">
+                        Pulou
+                      </span>
+                    )}
+                    {c.status === 'PENDING' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border border-gold-500/40 text-gold-300">
+                        Pendente
+                      </span>
+                    )}
+                  </div>
+                  {c.status === 'VOTED' && c.totalVotes !== null && (
+                    <div className="flex items-center gap-2 pl-9">
+                      <div className="flex-1 bg-ink-950 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="h-full bg-gold-400 rounded-full"
+                          style={{ width: `${(c.totalVotes / maxVotes) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-ink-500 shrink-0">
+                        {c.totalVotes} {c.totalVotes === 1 ? 'voto' : 'votos'} no total
+                      </span>
+                    </div>
+                  )}
+                </Link>
+              ));
+            })()}
             {categories.length === 0 && (
               <p className="text-center text-ink-400 text-sm">Nenhuma categoria disponível no momento.</p>
             )}

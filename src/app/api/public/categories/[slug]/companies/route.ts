@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolvePublicCityId } from '@/lib/publicCity';
 
-export async function GET(_req: Request, { params }: { params: { slug: string } }) {
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: Request, { params }: { params: { slug: string } }) {
+  const url = new URL(req.url);
+  const cityId = await resolvePublicCityId(url.searchParams.get('city'));
+  if (!cityId) {
+    return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
+  }
+
   const category = await prisma.category.findUnique({
-    where: { slug: params.slug },
+    where: { cityId_slug: { cityId, slug: params.slug } },
   });
 
   if (!category || !category.active) {

@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import { classifyComments, parseCommentsBlock } from '@/lib/instagramVotes';
 import { normalizeInstagram } from '@/lib/instagram';
 
 // GET: resumo + ranking de uma categoria já analisada
 export async function GET(req: Request) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const url = new URL(req.url);
   const categoryId = url.searchParams.get('categoryId');
   if (!categoryId) {
     return NextResponse.json({ error: 'categoryId é obrigatório.' }, { status: 400 });
+  }
+
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  if (!category || category.cityId !== cityId) {
+    return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
   }
 
   const rows = await prisma.instagramCommentVote.findMany({
@@ -72,7 +77,7 @@ const analyzeSchema = z.object({
 
 // POST: recebe um bloco de texto com comentários colados, classifica e persiste
 export async function POST(req: Request) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const json = await req.json().catch(() => null);
@@ -82,7 +87,7 @@ export async function POST(req: Request) {
   }
 
   const category = await prisma.category.findUnique({ where: { id: parsed.data.categoryId } });
-  if (!category) {
+  if (!category || category.cityId !== cityId) {
     return NextResponse.json({ error: 'Categoria não encontrada.' }, { status: 404 });
   }
 

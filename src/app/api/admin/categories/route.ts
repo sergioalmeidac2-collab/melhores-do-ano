@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 import { slugify } from '@/lib/slug';
 import { guessCategoryEmoji } from '@/lib/categoryEmoji';
 
 export async function GET() {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const categories = await prisma.category.findMany({
+    where: { cityId: cityId! },
     orderBy: { order: 'asc' },
     include: { _count: { select: { companies: true, votes: true } } },
   });
@@ -28,14 +29,14 @@ const createSchema = z.object({
   options: z.array(z.string().trim().min(1).max(160)).max(200).optional().default([]),
 });
 
-async function uniqueSlug(model: 'category' | 'company', name: string): Promise<string> {
+async function uniqueSlug(model: 'category' | 'company', cityId: string, name: string): Promise<string> {
   const base = slugify(name);
   let slug = base;
   let n = 1;
   while (
     model === 'category'
-      ? await prisma.category.findUnique({ where: { slug } })
-      : await prisma.company.findUnique({ where: { slug } })
+      ? await prisma.category.findUnique({ where: { cityId_slug: { cityId, slug } } })
+      : await prisma.company.findUnique({ where: { cityId_slug: { cityId, slug } } })
   ) {
     n += 1;
     slug = `${base}-${n}`;
@@ -44,7 +45,7 @@ async function uniqueSlug(model: 'category' | 'company', name: string): Promise<
 }
 
 export async function POST(req: Request) {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
   const json = await req.json().catch(() => null);
@@ -53,11 +54,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }, { status: 400 });
   }
 
-  const slug = await uniqueSlug('category', parsed.data.name);
-  const maxOrder = await prisma.category.aggregate({ _max: { order: true } });
+  const slug = await uniqueSlug('category', cityId!, parsed.data.name);
+  const maxOrder = await prisma.category.aggregate({ where: { cityId: cityId! }, _max: { order: true } });
 
   const category = await prisma.category.create({
     data: {
+      cityId: cityId!,
       name: parsed.data.name,
       slug,
       description: parsed.data.description || null,
@@ -75,9 +77,10 @@ export async function POST(req: Request) {
 
   for (let i = 0; i < optionNames.length; i++) {
     const name = optionNames[i];
-    const companySlug = await uniqueSlug('company', name);
+    const companySlug = await uniqueSlug('company', cityId!, name);
     await prisma.company.create({
       data: {
+        cityId: cityId!,
         name,
         slug: companySlug,
         categories: { create: { categoryId: category.id, order: i } },

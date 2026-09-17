@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireCityScope } from '@/lib/requireAdmin';
 
 export async function GET() {
-  const { error } = await requireAdmin();
+  const { cityId, error } = await requireCityScope();
   if (error) return error;
 
-  const validWhere = { status: 'VALID' as const };
+  const validWhere = { status: 'VALID' as const, cityId: cityId! };
 
   const [totalVotes, totalParticipants, categories, companies, byDay, byHour, bySource] = await Promise.all([
     prisma.vote.count({ where: validWhere }),
-    prisma.participant.count(),
+    prisma.vote.findMany({ where: validWhere, select: { participantId: true }, distinct: ['participantId'] }),
     prisma.category.findMany({
-      where: { active: true },
+      where: { cityId: cityId!, active: true },
       orderBy: { order: 'asc' },
       include: {
         _count: { select: { votes: { where: validWhere } } },
@@ -24,10 +24,12 @@ export async function GET() {
       _count: { _all: true },
     }),
     prisma.$queryRawUnsafe<{ day: string; count: bigint }[]>(
-      `SELECT to_char("createdAt", 'YYYY-MM-DD') as day, COUNT(*) as count FROM "Vote" WHERE status = 'VALID' GROUP BY day ORDER BY day ASC`,
+      `SELECT to_char("createdAt", 'YYYY-MM-DD') as day, COUNT(*) as count FROM "Vote" WHERE status = 'VALID' AND "cityId" = $1 GROUP BY day ORDER BY day ASC`,
+      cityId,
     ),
     prisma.$queryRawUnsafe<{ hour: string; count: bigint }[]>(
-      `SELECT to_char("createdAt", 'HH24') as hour, COUNT(*) as count FROM "Vote" WHERE status = 'VALID' GROUP BY hour ORDER BY hour ASC`,
+      `SELECT to_char("createdAt", 'HH24') as hour, COUNT(*) as count FROM "Vote" WHERE status = 'VALID' AND "cityId" = $1 GROUP BY hour ORDER BY hour ASC`,
+      cityId,
     ),
     prisma.vote.groupBy({
       by: ['utmSource'],
@@ -65,13 +67,13 @@ export async function GET() {
     };
   });
 
-  const suspiciousCount = await prisma.vote.count({ where: { status: 'SUSPICIOUS' } });
-  const invalidCount = await prisma.vote.count({ where: { status: 'INVALID' } });
-  const skippedCount = await prisma.vote.count({ where: { status: 'SKIPPED' } });
+  const suspiciousCount = await prisma.vote.count({ where: { status: 'SUSPICIOUS', cityId: cityId! } });
+  const invalidCount = await prisma.vote.count({ where: { status: 'INVALID', cityId: cityId! } });
+  const skippedCount = await prisma.vote.count({ where: { status: 'SKIPPED', cityId: cityId! } });
 
   return NextResponse.json({
     totalVotes,
-    totalParticipants,
+    totalParticipants: totalParticipants.length,
     suspiciousCount,
     invalidCount,
     skippedCount,

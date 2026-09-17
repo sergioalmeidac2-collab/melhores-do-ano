@@ -1,19 +1,32 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { getCategoryImageUrl } from '@/lib/categoryImage';
+import { resolvePublicCityId } from '@/lib/publicCity';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  let settings = await prisma.eventSettings.findFirst();
-  if (!settings) settings = await prisma.eventSettings.create({ data: {} });
+  const cityId = await resolvePublicCityId();
+  const city = cityId ? await prisma.city.findUnique({ where: { id: cityId } }) : null;
+  let settings = cityId ? await prisma.eventSettings.findUnique({ where: { cityId } }) : null;
+  if (!settings && cityId) settings = await prisma.eventSettings.create({ data: { cityId } });
 
-  const categories = await prisma.category.findMany({
-    where: { active: true },
-    orderBy: { order: 'asc' },
-    include: { _count: { select: { companies: true } } },
-  });
+  const categories = settings
+    ? await prisma.category.findMany({
+        where: { active: true, cityId: settings.cityId },
+        orderBy: { order: 'asc' },
+        include: { _count: { select: { companies: true } } },
+      })
+    : [];
   const visible = categories.filter((c) => c._count.companies > 0);
+
+  if (!settings) {
+    return (
+      <main className="min-h-[92vh] flex items-center justify-center text-center px-4">
+        <p className="text-ink-400">Nenhum evento configurado ainda.</p>
+      </main>
+    );
+  }
 
   const statusLabel =
     settings.votingStatus === 'NOT_STARTED'
@@ -23,7 +36,7 @@ export default async function HomePage() {
         : 'Votação aberta';
 
   return (
-    <main>
+    <main className="uppercase">
       <section className="relative overflow-hidden min-h-[92vh] flex flex-col items-center justify-center text-center px-4">
         <div
           className="absolute inset-0 -z-10"
@@ -38,10 +51,10 @@ export default async function HomePage() {
         <h1 className="font-display font-extrabold text-5xl sm:text-7xl leading-[1.05] tracking-tight max-w-4xl">
           {settings.heroTitle}
         </h1>
-        {settings.city && (
+        {city?.name && (
           <p className="text-gold-300 font-medium tracking-wide mt-3 text-lg">
-            {settings.city}
-            {settings.state ? ` — ${settings.state}` : ''}
+            {city.name}
+            {city.state ? ` — ${city.state}` : ''}
           </p>
         )}
         <p className="text-ink-300 text-lg sm:text-xl max-w-xl mt-6">{settings.heroSubtitle}</p>

@@ -8,15 +8,30 @@ interface Admin {
   name: string;
   email: string;
   role: 'admin' | 'editor';
+  cityId: string | null;
+  city?: { name: string } | null;
   createdAt: string;
+}
+
+interface City {
+  id: string;
+  name: string;
+  state: string;
 }
 
 export default function AdminAdministradoresPage() {
   const router = useRouter();
   const [me, setMe] = useState<{ email: string; role: string } | null>(null);
   const [admins, setAdmins] = useState<Admin[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'editor' as 'admin' | 'editor' });
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'editor' as 'admin' | 'editor',
+    cityId: '',
+  });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -39,6 +54,9 @@ export default function AdminAdministradoresPage() {
     fetch('/api/admin/me')
       .then((r) => r.json())
       .then(setMe);
+    fetch('/api/admin/cities')
+      .then((r) => r.json())
+      .then((d) => setCities(d.cities ?? []));
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -58,7 +76,7 @@ export default function AdminAdministradoresPage() {
       setError(data.error);
       return;
     }
-    setForm({ name: '', email: '', password: '', role: 'editor' });
+    setForm({ name: '', email: '', password: '', role: 'editor', cityId: '' });
     load();
   }
 
@@ -117,6 +135,24 @@ export default function AdminAdministradoresPage() {
           <option value="editor">Editor</option>
           <option value="admin">Admin</option>
         </select>
+        {form.role === 'editor' && (
+          <select
+            className="input"
+            value={form.cityId}
+            onChange={(e) => setForm((f) => ({ ...f, cityId: e.target.value }))}
+            required
+          >
+            <option value="" disabled>
+              Selecione a cidade que este acesso vai administrar
+            </option>
+            {cities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.state ? ` (${c.state})` : ''}
+              </option>
+            ))}
+          </select>
+        )}
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <button type="submit" disabled={saving} className="btn-primary disabled:opacity-60">
           {saving ? 'Criando...' : 'Criar acesso'}
@@ -144,7 +180,7 @@ export default function AdminAdministradoresPage() {
                     : 'border-ink-600 text-ink-400'
                 }`}
               >
-                {admin.role === 'admin' ? 'Admin' : 'Editor'}
+                {admin.role === 'admin' ? 'Admin' : `Editor · ${admin.city?.name ?? '—'}`}
               </span>
               {me?.email !== admin.email && (
                 <button onClick={() => remove(admin)} className="text-xs text-red-400 hover:underline">

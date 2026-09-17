@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { validateAndNormalizeBrazilPhone } from '@/lib/phone';
 import { normalizeInstagram } from '@/lib/instagram';
+import { resolvePublicCityId } from '@/lib/publicCity';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,23 +23,44 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: phoneResult.error ?? 'Telefone inválido.' }, { status: 400 });
   }
 
+  const cityId = await resolvePublicCityId(url.searchParams.get('city'));
+
   const participant = await prisma.participant.findUnique({
     where: { phone: phoneResult.normalized },
     include: { votes: { select: { categoryId: true, status: true } } },
   });
 
-  const categories = await prisma.category.findMany({
-    where: { active: true },
-    orderBy: { order: 'asc' },
-    include: { _count: { select: { companies: true } } },
-  });
+  const categories = cityId
+    ? await prisma.category.findMany({
+        where: { active: true, cityId },
+        orderBy: { order: 'asc' },
+        include: { _count: { select: { companies: true } } },
+      })
+    : [];
 
   const voteByCategory = new Map(participant?.votes.map((v) => [v.categoryId, v.status]) ?? []);
+
+  const votedCategoryIds = categories
+    .filter((c) => voteByCategory.get(c.id) && voteByCategory.get(c.id) !== 'SKIPPED')
+    .map((c) => c.id);
+
+  // Só contamos votos totais das categorias em que a pessoa já votou de
+  // verdade — quem ainda não votou (ou só pulou) não vê nenhum número, pra
+  // não influenciar a decisão de voto de ninguém.
+  const voteCounts = votedCategoryIds.length
+    ? await prisma.vote.groupBy({
+        by: ['categoryId'],
+        where: { categoryId: { in: votedCategoryIds }, status: 'VALID' },
+        _count: { _all: true },
+      })
+    : [];
+  const countByCategory = new Map(voteCounts.map((v) => [v.categoryId, v._count._all]));
 
   const progress = categories
     .filter((c) => c._count.companies > 0)
     .map((c) => {
       const status = voteByCategory.get(c.id);
+      const votedForReal = !!status && status !== 'SKIPPED';
       return {
         id: c.id,
         slug: c.slug,
@@ -46,6 +68,7 @@ export async function GET(req: Request) {
         emoji: c.emoji,
         imageUrl: c.imageUrl,
         status: status === 'SKIPPED' ? 'SKIPPED' : status ? 'VOTED' : 'PENDING',
+        totalVotes: votedForReal ? (countByCategory.get(c.id) ?? 0) : null,
       };
     });
 
